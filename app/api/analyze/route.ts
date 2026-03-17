@@ -58,7 +58,6 @@ Required JSON structure:
   "warnings": []
 }`
 }
-
 // ─── OLLAMA ───────────────────────────────────────────────────────────────────
 async function callOllama(prompt: string): Promise<string> {
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
@@ -113,7 +112,7 @@ function extractJSON(text: string): string {
   const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
   const start = clean.indexOf('{')
   const end = clean.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('No JSON found in response')
+  if (start === -1 || end === -1) throw new Error('No JSON found in responses')
   return clean.slice(start, end + 1)
 }
 

@@ -16,9 +16,26 @@ interface AiInsights {
     warnings: string[]
 }
 
-interface Props { results: FitnessResults; aiInsights: AiInsights; goal: Goal; name: string; onRestart: () => void }
+interface Props { results: FitnessResults; aiInsights: AiInsights; goal: Goal; name: string; onRestart: () => void; isPro?: boolean; onUpgrade?: () => void }
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+
+function LockOverlay({ onUpgrade }: { onUpgrade?: () => void }) {
+    return (
+        <div style={{ position:'relative', marginBottom:10 }}>
+            <div style={{ position:'absolute', inset:0, background:'rgba(10,10,10,0.85)', borderRadius:12, zIndex:2, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, padding:20 }}>
+                <div style={{ fontSize:22 }}>🔒</div>
+                <div style={{ fontSize:14, fontWeight:500, color:'var(--text)', textAlign:'center' }}>Pro feature</div>
+                <div style={{ fontSize:12, color:'var(--text2)', textAlign:'center' }}>Buy credits to unlock diet plan, PDF report and more</div>
+                <button onClick={onUpgrade} style={{ background:'var(--accent)', border:'none', borderRadius:8, padding:'9px 20px', fontSize:13, fontWeight:500, color:'#0a0a0a', cursor:'pointer', marginTop:4 }}>
+                    Buy credits — from ₹29
+                </button>
+            </div>
+        </div>
+    )
+}
+
+
 
 function Card({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
     return (
@@ -62,7 +79,7 @@ function ExplainCard({ title, text, color }: { title: string; text: string; colo
     )
 }
 
-export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart }: Props) {
+export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart, isPro = false, onUpgrade }: Props) {
     const firstName = name.split(' ')[0]
 
     return (
@@ -235,6 +252,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                 })}
             </div>
 
+            )
             {/* ══════════════════════════════════════════════════════
           SECTION 5 — WORKOUT + NUTRITION TIPS
       ══════════════════════════════════════════════════════ */}

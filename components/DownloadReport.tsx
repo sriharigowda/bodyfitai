@@ -321,32 +321,32 @@ export default function DownloadReport({ results, aiInsights, goal, name }: Prop
   }
 
   return (
-      <button
-          id="pdf-btn"
-          onClick={generatePDF}
-          style={{
-            width: '100%',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 10,
-            padding: '13px 0',
-            color: '#0a0a0a',
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            marginBottom: 10,
-          }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Download PDF Report
-      </button>
+    <button
+      id="pdf-btn"
+      onClick={generatePDF}
+      style={{
+        width: '100%',
+        background: 'var(--accent)',
+        border: 'none',
+        borderRadius: 10,
+        padding: '13px 0',
+        color: '#0a0a0a',
+        fontSize: 14,
+        fontWeight: 500,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 10,
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download PDF Report
+    </button>
   )
 }

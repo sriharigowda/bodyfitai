@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jsonrepair } from 'jsonrepair'
 import { Measurements, FitnessResults, calculateResults } from '@/lib/calculations'
+import { canAnalyze, incrementUsage, deductCredit } from '@/lib/usage'
+import { getIdentifier } from '@/lib/identifier'
 
 const PROVIDER     = (process.env.AI_PROVIDER || 'groq') as 'ollama' | 'groq' | 'claude'
 const OLLAMA_URL   = process.env.OLLAMA_URL   || 'http://localhost:11434'
@@ -115,6 +117,19 @@ export async function POST(req: NextRequest) {
     const measurements: Measurements = body.measurements
     const results: FitnessResults    = calculateResults(measurements)
 
+    const ip = getIdentifier(req)
+    console.log('[BodyFitAI] identifier:', ip)
+    const status = await canAnalyze(ip)
+    console.log('[BodyFitAI] canAnalyze:', JSON.stringify(status))
+    if (!status.allowed) {
+      return NextResponse.json({
+        error: 'FREE_LIMIT_REACHED',
+        message: 'You have used all your free analyses. Buy credits to continue.',
+        freeLeft: 0,
+        credits: status.credits,
+      }, { status: 403 })
+    }
+
     console.log(`[BodyFitAI] Provider: ${PROVIDER}`)
 
     // Two parallel API calls — analysis + diet plan
@@ -128,6 +143,12 @@ export async function POST(req: NextRequest) {
     console.log('[BodyFitAI] Parsing diet plan...')
     const weeklyDietPlan = JSON.parse(extractJSON(dietText))
     console.log('[BodyFitAI] Both parsed OK')
+
+    // Deduct credit or increment free usage
+    if (!status.isPro) {
+      if (status.freeLeft > 0) await incrementUsage(ip)
+      else await deductCredit(ip)
+    }
 
     const aiInsights = { ...analysis, weeklyDietPlan }
 

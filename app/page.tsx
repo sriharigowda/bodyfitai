@@ -1,6 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { signIn, useSession } from 'next-auth/react'
+import { useState } from 'react'
 import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
 import ResultsPage from '@/components/ResultsPage'
 
@@ -28,16 +27,6 @@ const defaultForm = {
 }
 
 export default function Home() {
-  const { data: session } = useSession()
-
-  useEffect(() => {
-    if (session?.user?.name && !form.name) {
-      setForm(f => ({ ...f, name: session.user!.name! }))
-      setScreen('form')
-      setStep(1)
-    }
-  }, [session])
-
   const [screen,     setScreen]     = useState<Screen>('home')
   const [step,       setStep]       = useState(1)
   const [unit,       setUnit]       = useState<Unit>('metric')
@@ -55,7 +44,7 @@ export default function Home() {
   const uw = unit==='metric' ? 'Weight (kg)' : 'Weight (lbs)'
   const uh = unit==='metric' ? 'Height (cm)' : 'Height (in)'
 
-  const setF = (k:string,v:string) => {
+  const setF = (k:string, v:string) => {
     setForm(f=>({...f,[k]:v}))
     if(fieldErrors[k]) setFieldErrors(p=>{const n={...p};delete n[k];return n})
   }
@@ -67,7 +56,7 @@ export default function Home() {
     const e:Record<string,string>={}
     if(n===1){
       if(!form.name.trim())                          e.name='Please enter your name'
-      if(!form.age||+form.age<10||+form.age>100)    e.age='Valid age (10-100)'
+      if(!form.age||+form.age<10||+form.age>100)    e.age='Valid age (10–100)'
       if(!form.gender)                               e.gender='Select gender'
       if(!form.height||+form.height<=0)             e.height='Enter height'
       if(!form.weight||+form.weight<=0)             e.weight='Enter weight'
@@ -146,47 +135,47 @@ export default function Home() {
   const backS={flex:1,background:'transparent',border:'0.5px solid var(--border2)',borderRadius:10,padding:12,color:'var(--text2)',fontSize:14,cursor:'pointer'} as const
   const nextS={flex:2,background:'var(--accent)',border:'none',borderRadius:10,padding:12,color:'#0a0a0a',fontSize:14,fontWeight:500,cursor:'pointer'} as const
 
-  const GoogleIcon=()=>(
-      <svg width="16" height="16" viewBox="0 0 48 48">
-        <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-8 20-20 0-1.3-.1-2.7-.4-4z"/>
-        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.1 18.9 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/>
-        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5l-6.2-5.2C29.4 35.6 26.8 36 24 36c-5.2 0-9.6-3-11.3-7.4l-6.6 4.9C9.7 39.9 16.4 44 24 44z"/>
-        <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.2-2.3 4-4.2 5.2l6.2 5.2C41 35.3 44 30.1 44 24c0-1.3-.1-2.7-.4-4z"/>
-      </svg>
-  )
-
   return(
       <div style={{minHeight:'100vh',background:'var(--bg)'}}>
+
         {/* NAV */}
         <nav style={{background:'var(--bg2)',borderBottom:'0.5px solid var(--border)',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:10}}>
           <div style={{fontSize:18,fontWeight:500,letterSpacing:'-0.3px',cursor:'pointer'}} onClick={()=>{setScreen('home');setStep(1)}}>
             <span style={{color:'var(--text)'}}>Body</span><span style={{color:'var(--text)'}}>Fit</span><span style={{color:'var(--accent)'}}>AI</span>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:12}}>
-            {screen==='form'&&<span style={{fontSize:12,color:'var(--text3)'}}>Step {step} of 4</span>}
-            {screen==='results'&&<button onClick={()=>{setScreen('home');setStep(1);setForm(defaultForm);setApiData(null)}} style={{fontSize:12,color:'var(--text3)',background:'none',border:'none',cursor:'pointer'}}>Start over</button>}
-            {session?.user&&(
-                <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  {session.user.image&&<img src={session.user.image} alt="" style={{width:26,height:26,borderRadius:'50%'}}/>}
-                  <span style={{fontSize:12,color:'var(--text2)'}}>{session.user.name?.split(' ')[0]}</span>
-                </div>
-            )}
-          </div>
+          {screen==='form'&&<span style={{fontSize:12,color:'var(--text3)'}}>Step {step} of 4</span>}
+          {screen==='results'&&(
+              <button onClick={()=>{setScreen('home');setStep(1);setForm(defaultForm);setApiData(null)}}
+                      style={{fontSize:12,color:'var(--text3)',background:'none',border:'none',cursor:'pointer'}}>
+                Start over
+              </button>
+          )}
         </nav>
 
         {/* HOME */}
         {screen==='home'&&(
             <div style={{maxWidth:480,margin:'0 auto',padding:'40px 20px'}}>
               <div className="fade-up" style={{textAlign:'center',marginBottom:40}}>
-                <div style={{display:'inline-block',background:'var(--accent-dim)',border:'0.5px solid var(--accent-border)',borderRadius:20,padding:'4px 14px',fontSize:12,color:'var(--accent)',fontWeight:500,marginBottom:20,letterSpacing:'0.04em'}}>AI-POWERED FITNESS ANALYSIS</div>
-                <h1 style={{fontSize:36,fontWeight:500,lineHeight:1.2,marginBottom:14,letterSpacing:'-0.5px'}}>Your body.<br/><span style={{color:'var(--accent)'}}>Analyzed by AI.</span></h1>
-                <p style={{fontSize:15,color:'var(--text2)',lineHeight:1.7,margin:'0 auto 32px',maxWidth:360}}>Enter your body measurements and get a personalized calorie target, macro split, FFMI score, and full diet plan — powered by AI.</p>
-                <button onClick={()=>setScreen('form')} style={{background:'var(--accent)',color:'#0a0a0a',border:'none',padding:'14px 40px',borderRadius:10,fontSize:15,fontWeight:500,cursor:'pointer',width:'100%',maxWidth:300,marginBottom:12,display:'block',margin:'0 auto 12px'}}>Get my free plan</button>
-                <div style={{display:'flex',alignItems:'center',gap:8,justifyContent:'center',margin:'8px auto',maxWidth:300}}><div style={{height:0.5,flex:1,background:'var(--border)'}}/><span style={{fontSize:11,color:'var(--text3)'}}>or</span><div style={{height:0.5,flex:1,background:'var(--border)'}}/></div>
-                <button onClick={()=>signIn('google')} style={{background:'var(--bg2)',border:'0.5px solid var(--border2)',borderRadius:10,padding:'11px 24px',fontSize:14,color:'var(--text)',cursor:'pointer',width:'100%',maxWidth:300,display:'flex',alignItems:'center',justifyContent:'center',gap:10,margin:'0 auto'}}><GoogleIcon/>Continue with Google</button>
+                <div style={{display:'inline-block',background:'var(--accent-dim)',border:'0.5px solid var(--accent-border)',borderRadius:20,padding:'4px 14px',fontSize:12,color:'var(--accent)',fontWeight:500,marginBottom:20,letterSpacing:'0.04em'}}>
+                  AI-POWERED FITNESS ANALYSIS
+                </div>
+                <h1 style={{fontSize:36,fontWeight:500,lineHeight:1.2,marginBottom:14,letterSpacing:'-0.5px'}}>
+                  Your body.<br/><span style={{color:'var(--accent)'}}>Analyzed by AI.</span>
+                </h1>
+                <p style={{fontSize:15,color:'var(--text2)',lineHeight:1.7,margin:'0 auto 32px',maxWidth:360}}>
+                  Enter your body measurements and get a personalized calorie target, macro split, FFMI score, and full diet plan — powered by AI.
+                </p>
+                <button onClick={()=>setScreen('form')} style={{background:'var(--accent)',color:'#0a0a0a',border:'none',padding:'14px 40px',borderRadius:10,fontSize:15,fontWeight:500,cursor:'pointer',width:'100%',maxWidth:300,display:'block',margin:'0 auto'}}>
+                  Get my free plan
+                </button>
               </div>
               <div className="fade-up-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                {[{title:'Body fat % + FFMI',desc:'Full body composition'},{title:'Calorie targets',desc:'Daily intake + burn'},{title:'Macro split',desc:'Protein, carbs, fat & fiber'},{title:'Diet plan',desc:'Veg/non-veg day-by-day'}].map((f,i)=>(
+                {[
+                  {title:'Body fat % + FFMI', desc:'Full body composition analysis'},
+                  {title:'Calorie targets',   desc:'Daily intake + burn goals'},
+                  {title:'Macro split',       desc:'Protein, carbs, fat & fiber'},
+                  {title:'Diet plan',         desc:'Veg/non-veg day-by-day'},
+                ].map((f,i)=>(
                     <div key={i} style={{background:'var(--bg2)',border:'0.5px solid var(--border)',borderRadius:12,padding:'16px 14px'}}>
                       <div style={{width:28,height:28,background:'var(--accent-dim)',borderRadius:6,marginBottom:8}}/>
                       <div style={{fontSize:13,fontWeight:500,marginBottom:4}}>{f.title}</div>
@@ -204,19 +193,15 @@ export default function Home() {
                 <div style={{height:3,background:'var(--accent)',borderRadius:2,width:progress,transition:'width 0.3s'}}/>
               </div>
               {error&&<div style={{background:'#2a1010',border:'0.5px solid #5a2020',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#f09595'}}>{error}</div>}
-              {hasErr&&<div style={{background:'rgba(226,75,74,0.08)',border:'0.5px solid rgba(226,75,74,0.4)',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#e24b4a',display:'flex',alignItems:'center',gap:8}}><span>⚠</span> Please fill in all required fields.</div>}
+              {hasErr&&<div style={{background:'rgba(226,75,74,0.08)',border:'0.5px solid rgba(226,75,74,0.4)',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#e24b4a',display:'flex',alignItems:'center',gap:8}}>⚠ Please fill in all required fields.</div>}
 
               {/* STEP 1 */}
               {step===1&&(
                   <div className="fade-up">
                     <div style={{fontSize:11,color:'var(--accent)',fontWeight:500,letterSpacing:'0.08em',marginBottom:6}}>STEP 1 OF 4</div>
                     <h2 style={{fontSize:20,fontWeight:500,marginBottom:4}}>Basic info</h2>
-                    <p style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>Tell us about yourself</p>
-                    {!session&&(
-                        <button onClick={()=>signIn('google')} style={{width:'100%',background:'var(--bg2)',border:'0.5px solid var(--border2)',borderRadius:10,padding:'9px 14px',fontSize:13,color:'var(--text2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:16}}>
-                          <GoogleIcon/> Auto-fill name with Google
-                        </button>
-                    )}
+                    <p style={{fontSize:13,color:'var(--text2)',marginBottom:20}}>Tell us about yourself</p>
+
                     <div style={{display:'flex',gap:8,marginBottom:20}}>
                       {(['metric','imperial'] as Unit[]).map(u=>(
                           <button key={u} onClick={()=>setUnit(u)} style={{padding:'7px 16px',borderRadius:8,border:`0.5px solid ${unit===u?'var(--accent)':'var(--border2)'}`,background:unit===u?'var(--accent-dim)':'transparent',color:unit===u?'var(--accent)':'var(--text3)',fontSize:12,cursor:'pointer'}}>
@@ -224,18 +209,41 @@ export default function Home() {
                           </button>
                       ))}
                     </div>
+
                     <div style={{marginBottom:14}}>
                       <label style={{fontSize:12,color:fieldErrors.name?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Full name *</label>
                       <input placeholder="e.g. Srini Kumar" value={form.name} onChange={e=>setF('name',e.target.value)} style={{border:eb('name'),background:ebg('name')}}/>
                       <FE k="name"/>
                     </div>
+
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-                      <div><label style={{fontSize:12,color:fieldErrors.age?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Age *</label><input type="number" placeholder="25" value={form.age} onChange={e=>setF('age',e.target.value)} style={{border:eb('age'),background:ebg('age')}}/><FE k="age"/></div>
-                      <div><label style={{fontSize:12,color:fieldErrors.gender?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Gender *</label><select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{border:eb('gender'),background:ebg('gender')}}><option value="">Select</option><option>Male</option><option>Female</option></select><FE k="gender"/></div>
-                      <div><label style={{fontSize:12,color:fieldErrors.height?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>{uh} *</label><input type="number" placeholder={unit==='metric'?'175':'69'} value={form.height} onChange={e=>setF('height',e.target.value)} style={{border:eb('height'),background:ebg('height')}}/><FE k="height"/></div>
-                      <div><label style={{fontSize:12,color:fieldErrors.weight?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>{uw} *</label><input type="number" placeholder={unit==='metric'?'75':'165'} value={form.weight} onChange={e=>setF('weight',e.target.value)} style={{border:eb('weight'),background:ebg('weight')}}/><FE k="weight"/></div>
+                      <div>
+                        <label style={{fontSize:12,color:fieldErrors.age?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Age *</label>
+                        <input type="number" placeholder="25" value={form.age} onChange={e=>setF('age',e.target.value)} style={{border:eb('age'),background:ebg('age')}}/>
+                        <FE k="age"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:12,color:fieldErrors.gender?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Gender *</label>
+                        <select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{border:eb('gender'),background:ebg('gender')}}>
+                          <option value="">Select</option><option>Male</option><option>Female</option>
+                        </select>
+                        <FE k="gender"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:12,color:fieldErrors.height?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>{uh} *</label>
+                        <input type="number" placeholder={unit==='metric'?'175':'69'} value={form.height} onChange={e=>setF('height',e.target.value)} style={{border:eb('height'),background:ebg('height')}}/>
+                        <FE k="height"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:12,color:fieldErrors.weight?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>{uw} *</label>
+                        <input type="number" placeholder={unit==='metric'?'75':'165'} value={form.weight} onChange={e=>setF('weight',e.target.value)} style={{border:eb('weight'),background:ebg('weight')}}/>
+                        <FE k="weight"/>
+                      </div>
                     </div>
-                    <div style={{display:'flex',gap:10}}><button style={backS} onClick={()=>{setScreen('home');setFieldErrors({})}}>Back</button><button style={nextS} onClick={()=>tryNext(2)}>Continue</button></div>
+                    <div style={{display:'flex',gap:10}}>
+                      <button style={backS} onClick={()=>{setScreen('home');setFieldErrors({})}}>Back</button>
+                      <button style={nextS} onClick={()=>tryNext(2)}>Continue</button>
+                    </div>
                   </div>
               )}
 
@@ -262,7 +270,10 @@ export default function Home() {
                           </div>
                       ))}
                     </div>
-                    <div style={{display:'flex',gap:10}}><button style={backS} onClick={()=>{setStep(1);setFieldErrors({})}}>Back</button><button style={nextS} onClick={()=>tryNext(3)}>Continue</button></div>
+                    <div style={{display:'flex',gap:10}}>
+                      <button style={backS} onClick={()=>{setStep(1);setFieldErrors({})}}>Back</button>
+                      <button style={nextS} onClick={()=>tryNext(3)}>Continue</button>
+                    </div>
                   </div>
               )}
 
@@ -287,7 +298,10 @@ export default function Home() {
                           </div>
                       ))}
                     </div>
-                    <div style={{display:'flex',gap:10}}><button style={backS} onClick={()=>{setStep(2);setFieldErrors({})}}>Back</button><button style={nextS} onClick={()=>tryNext(4)}>Continue</button></div>
+                    <div style={{display:'flex',gap:10}}>
+                      <button style={backS} onClick={()=>{setStep(2);setFieldErrors({})}}>Back</button>
+                      <button style={nextS} onClick={()=>tryNext(4)}>Continue</button>
+                    </div>
                   </div>
               )}
 
@@ -297,6 +311,7 @@ export default function Home() {
                     <div style={{fontSize:11,color:'var(--accent)',fontWeight:500,letterSpacing:'0.08em',marginBottom:6}}>STEP 4 OF 4</div>
                     <h2 style={{fontSize:20,fontWeight:500,marginBottom:4}}>Goal & diet</h2>
                     <p style={{fontSize:13,color:'var(--text2)',marginBottom:20}}>What do you want to achieve and how do you eat?</p>
+
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
                       {GOALS.map(g=>(
                           <div key={g.value} onClick={()=>setGoal(g.value)} style={{background:goal===g.value?'var(--accent-dim)':'var(--bg2)',border:`0.5px solid ${goal===g.value?'var(--accent)':'var(--border)'}`,borderRadius:12,padding:'14px 12px',cursor:'pointer',textAlign:'center'}}>
@@ -306,11 +321,15 @@ export default function Home() {
                           </div>
                       ))}
                     </div>
+
                     <div style={{marginBottom:16}}>
-                      <label style={{fontSize:12,color:fieldErrors.targetWeight?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>Target {unit==='metric'?'weight (kg)':'weight (lbs)'} *</label>
+                      <label style={{fontSize:12,color:fieldErrors.targetWeight?'#e24b4a':'var(--text2)',display:'block',marginBottom:6}}>
+                        Target {unit==='metric'?'weight (kg)':'weight (lbs)'} *
+                      </label>
                       <input type="number" placeholder={unit==='metric'?'70':'154'} value={form.targetWeight} onChange={e=>setF('targetWeight',e.target.value)} style={{border:eb('targetWeight'),background:ebg('targetWeight')}}/>
                       <FE k="targetWeight"/>
                     </div>
+
                     <div style={{marginBottom:20}}>
                       <label style={{fontSize:12,color:'var(--text2)',display:'block',marginBottom:10}}>Activity level</label>
                       <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -322,6 +341,7 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
+
                     <div style={{marginBottom:16}}>
                       <label style={{fontSize:12,color:'var(--text2)',display:'block',marginBottom:10}}>Diet type</label>
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
@@ -333,6 +353,7 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
+
                     {dietType==='Mixed'&&(
                         <div style={{marginBottom:20}}>
                           <label style={{fontSize:12,color:fieldErrors.nonVegDays?'#e24b4a':'var(--text2)',display:'block',marginBottom:10}}>Which days are non-veg?</label>
@@ -346,7 +367,11 @@ export default function Home() {
                           <FE k="nonVegDays"/>
                         </div>
                     )}
-                    <div style={{display:'flex',gap:10}}><button style={backS} onClick={()=>{setStep(3);setFieldErrors({})}}>Back</button><button style={nextS} onClick={tryAnalyze}>Analyze my body</button></div>
+
+                    <div style={{display:'flex',gap:10}}>
+                      <button style={backS} onClick={()=>{setStep(3);setFieldErrors({})}}>Back</button>
+                      <button style={nextS} onClick={tryAnalyze}>Analyze my body</button>
+                    </div>
                   </div>
               )}
             </div>
@@ -363,8 +388,13 @@ export default function Home() {
 
         {/* RESULTS */}
         {screen==='results'&&apiData&&(
-            <ResultsPage results={apiData.results} aiInsights={apiData.aiInsights} goal={goal} name={form.name}
-                         onRestart={()=>{setScreen('home');setStep(1);setForm(defaultForm);setApiData(null)}}/>
+            <ResultsPage
+                results={apiData.results}
+                aiInsights={apiData.aiInsights}
+                goal={goal}
+                name={form.name}
+                onRestart={()=>{setScreen('home');setStep(1);setForm(defaultForm);setApiData(null)}}
+            />
         )}
       </div>
   )

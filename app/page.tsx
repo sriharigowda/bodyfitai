@@ -47,7 +47,7 @@ export default function Home() {
   const blockedRef = useRef(false)  // tracks if analysis was blocked by limit
   const [userIp,      setUserIp]      = useState('anonymous')
 
-  useEffect(() => {
+  function refreshUsage() {
     fetch('/api/usage')
         .then(r => r.json())
         .then(d => {
@@ -57,6 +57,10 @@ export default function Home() {
           if (d.identifier) setUserIp(d.identifier)
         })
         .catch(() => {})
+  }
+
+  useEffect(() => {
+    refreshUsage()
   }, [])
 
   const u  = (lbl: string) => `${lbl} (${unit==='metric'?'cm':'in'})`
@@ -168,6 +172,7 @@ export default function Home() {
 
       setApiData(data)
       setScreen('results')
+      refreshUsage()  // update credits display after analysis
     } catch {
       clearInterval(iv)
       setError('Something went wrong. Please try again.')
@@ -489,6 +494,7 @@ export default function Home() {
                   setShowUpgrade(false)
                   const wasBlocked = blockedRef.current
                   blockedRef.current = false
+                  refreshUsage()  // update credits after payment
                   // Only re-run analysis if user was blocked mid-analysis
                   if (wasBlocked) {
                     setTimeout(() => void runAnalysis(), 300)

@@ -40,12 +40,11 @@ export default function Home() {
   const [apiData,     setApiData]     = useState<any>(null)
   const [error,       setError]       = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({})
-  const [freeLeft,    setFreeLeft]    = useState(3)
+  const [freeLeft,    setFreeLeft]    = useState<number | undefined>(undefined)
   const [credits,     setCredits]     = useState(0)
   const [isPro,       setIsPro]       = useState(false)
   const [showUpgrade,   setShowUpgrade]   = useState(false)
-  const [blockedByLimit, setBlockedByLimit] = useState(false)
-  const blockedRef = useRef(false)  // ref to avoid stale closure
+  const blockedRef = useRef(false)  // tracks if analysis was blocked by limit
   const [userIp,      setUserIp]      = useState('anonymous')
 
   useEffect(() => {
@@ -157,7 +156,6 @@ export default function Home() {
 
       if (data.error === 'FREE_LIMIT_REACHED') {
         setScreen('form')  // keep form data intact
-        setBlockedByLimit(true)
         blockedRef.current = true
         setShowUpgrade(true)
         return
@@ -211,9 +209,9 @@ export default function Home() {
                 : (
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ fontSize:11, color:'var(--text3)' }}>
-                  {freeLeft > 0 ? `${freeLeft} free left` : `${credits} credits`}
+                  {freeLeft === undefined ? '' : freeLeft > 0 ? `${freeLeft} free left` : `${credits} credits`}
                 </span>
-                      <button onClick={() => { setBlockedByLimit(false); blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', color:'var(--accent)', padding:'3px 10px', borderRadius:10, cursor:'pointer', fontWeight:500 }}>
+                      <button onClick={() => { blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', color:'var(--accent)', padding:'3px 10px', borderRadius:10, cursor:'pointer', fontWeight:500 }}>
                         {credits === 0 && freeLeft === 0 ? 'Buy credits' : '+ Add more'}
                       </button>
                     </div>
@@ -241,7 +239,7 @@ export default function Home() {
                 </button>
                 {!isPro && (
                     <p style={{ fontSize:12, color:'var(--text3)', marginTop:8 }}>
-                      {freeLeft > 0
+                      {freeLeft === undefined ? '' : freeLeft > 0
                           ? `${freeLeft} free ${freeLeft === 1 ? 'analysis' : 'analyses'} remaining`
                           : credits > 0 ? `${credits} credits available` : '0 analyses left — buy credits to continue'}
                     </p>
@@ -490,11 +488,10 @@ export default function Home() {
                   setIsPro(newCredits > 0)
                   setShowUpgrade(false)
                   const wasBlocked = blockedRef.current
-                  setBlockedByLimit(false)
                   blockedRef.current = false
                   // Only re-run analysis if user was blocked mid-analysis
                   if (wasBlocked) {
-                    setTimeout(() => runAnalysis(), 300)
+                    setTimeout(() => void runAnalysis(), 300)
                   }
                 }}
             />

@@ -105,10 +105,11 @@ export function getBodyFatCategory(bf: number, gender: Gender): string {
 // FFMI = Fat Free Mass / (height in m)^2
 // Normalised FFMI = FFMI + 6.1 * (1.8 - height in m)
 export function calculateFFMI(leanMassKg: number, heightCm: number): number {
-  const heightM = heightCm / 100
+  const heightM = Math.max(heightCm / 100, 1.0)  // prevent division by tiny number
   const ffmi = leanMassKg / (heightM * heightM)
   const normalised = ffmi + 6.1 * (1.8 - heightM)
-  return parseFloat(normalised.toFixed(1))
+  // Cap to realistic human range (10–35)
+  return parseFloat(Math.min(Math.max(normalised, 10), 35).toFixed(1))
 }
 
 export function getFFMICategory(ffmi: number, gender: Gender): string {
@@ -154,7 +155,22 @@ export function calculateTargetMetrics(m: Measurements): TargetMetrics {
   }
 }
 
+export function sanitizeMeasurements(m: Measurements): Measurements {
+  // Clamp all values to realistic human ranges
+  return {
+    ...m,
+    height:        Math.min(Math.max(m.height, 100), 250),   // 100–250cm
+    weight:        Math.min(Math.max(m.weight, 30), 300),    // 30–300kg
+    age:           Math.min(Math.max(m.age, 10), 100),
+    targetWeight:  Math.min(Math.max(m.targetWeight, 30), 300),
+    neck:          Math.min(Math.max(m.neck, 20), 80),
+    stomach:       Math.min(Math.max(m.stomach, 40), 200),
+    hip:           Math.min(Math.max(m.hip, 40), 200),
+  }
+}
+
 export function calculateResults(m: Measurements): FitnessResults {
+  m = sanitizeMeasurements(m)
   const bodyFatPercent  = calculateBodyFat(m.gender, m.neck, m.stomach, m.hip, m.height)
   const bodyFatCategory = getBodyFatCategory(bodyFatPercent, m.gender)
   const fatMass         = parseFloat(((m.weight * bodyFatPercent) / 100).toFixed(1))
@@ -165,8 +181,8 @@ export function calculateResults(m: Measurements): FitnessResults {
 
   // BMR — Mifflin-St Jeor
   const bmr = m.gender === 'Female'
-    ? 10 * m.weight + 6.25 * m.height - 5 * m.age - 161
-    : 10 * m.weight + 6.25 * m.height - 5 * m.age + 5
+      ? 10 * m.weight + 6.25 * m.height - 5 * m.age - 161
+      : 10 * m.weight + 6.25 * m.height - 5 * m.age + 5
 
   const tdee = bmr * ACTIVITY_MULTIPLIERS[m.activityLevel]
 

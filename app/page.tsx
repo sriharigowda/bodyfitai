@@ -45,7 +45,16 @@ export default function Home() {
   const [isPro,       setIsPro]       = useState(false)
   const [showUpgrade,   setShowUpgrade]   = useState(false)
   const blockedRef = useRef(false)  // tracks if analysis was blocked by limit
+  const [showPopup, setShowPopup] = useState(false)
   const [userIp,      setUserIp]      = useState('anonymous')
+
+  useEffect(() => {
+    const seen = localStorage.getItem('bodyfitai_popup_seen')
+    if (!seen) {
+      setTimeout(() => setShowPopup(true), 2000)
+      localStorage.setItem('bodyfitai_popup_seen', '1')
+    }
+  }, [])
 
   function refreshUsage() {
     fetch('/api/usage')
@@ -224,6 +233,13 @@ export default function Home() {
             }
           </div>
         </nav>
+
+        {/* COMING SOON BANNER */}
+        <div style={{ background:'linear-gradient(90deg,#1a2a00,#0a1a00,#1a2a00)', borderBottom:'0.5px solid rgba(232,255,71,0.2)', padding:'8px 20px', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+          <span style={{ fontSize:11, background:'rgba(232,255,71,0.15)', color:'#e8ff47', padding:'2px 8px', borderRadius:10, fontWeight:500, letterSpacing:'0.04em' }}>COMING SOON</span>
+          <span style={{ fontSize:12, color:'#a0b060' }}>Save your results · Weekly body tracking · Progress history</span>
+          <span style={{ fontSize:12, color:'#e8ff47', marginLeft:4 }}>🚀</span>
+        </div>
 
         {/* HOME */}
         {screen === 'home' && (
@@ -479,6 +495,39 @@ export default function Home() {
                 onUpgrade={() => setShowUpgrade(true)}
                 onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null) }}
             />
+        )}
+
+        {/* COMING SOON POPUP */}
+        {showPopup && (
+            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
+              <div style={{ background:'#111', border:'0.5px solid #2a2a2a', borderRadius:20, padding:'32px 28px', maxWidth:400, width:'100%', textAlign:'center' }}>
+                <div style={{ fontSize:32, marginBottom:16 }}>🚀</div>
+                <div style={{ fontSize:11, color:'#e8ff47', fontWeight:500, letterSpacing:'0.06em', marginBottom:8 }}>COMING SOON</div>
+                <h2 style={{ fontSize:22, fontWeight:500, color:'#f0f0f0', marginBottom:8, lineHeight:1.3 }}>Big updates are coming to BodyFitAI</h2>
+                <p style={{ fontSize:13, color:'#888', marginBottom:24, lineHeight:1.6 }}>We are working on powerful new features to help you track your fitness journey week by week.</p>
+                <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:28 }}>
+                  {[
+                    { icon:'💾', title:'Save your results',           desc:'Save every analysis to your account' },
+                    { icon:'📊', title:'Progress tracking & history', desc:'See how your body changes over time' },
+                    { icon:'📅', title:'Weekly body tracking',        desc:'Compare week 1 vs now side by side' },
+                  ].map((f, i) => (
+                      <div key={i} style={{ background:'#1a1a1a', border:'0.5px solid #2a2a2a', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
+                        <span style={{ fontSize:20 }}>{f.icon}</span>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:500, color:'#f0f0f0', marginBottom:2 }}>{f.title}</div>
+                          <div style={{ fontSize:11, color:'#666' }}>{f.desc}</div>
+                        </div>
+                      </div>
+                  ))}
+                </div>
+                <button onClick={() => setShowPopup(false)} style={{ width:'100%', background:'#e8ff47', border:'none', borderRadius:10, padding:'13px 0', fontSize:14, fontWeight:500, color:'#0a0a0a', cursor:'pointer', marginBottom:10 }}>
+                  Got it, let me try the app!
+                </button>
+                <button onClick={() => setShowPopup(false)} style={{ background:'none', border:'none', color:'#555', fontSize:12, cursor:'pointer' }}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
         )}
 
         {/* UPGRADE MODAL */}

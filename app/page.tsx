@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { getUser, sendOTP, verifyOTP, signOut } from '@/lib/auth'
 import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
 import ResultsPage from '@/components/ResultsPage'
 import UpgradeModal from '@/components/UpgradeModal'
@@ -38,6 +39,7 @@ export default function Home() {
   const [nonVegDays,  setNonVegDays]  = useState<string[]>(['Monday','Wednesday','Friday','Saturday'])
   const [analyzeMsg,  setAnalyzeMsg]  = useState('Calculating body fat percentage...')
   const [apiData,     setApiData]     = useState<any>(null)
+  const [savedMeasurements, setSavedMeasurements] = useState<any>(null)
   const [error,       setError]       = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({})
   const [freeLeft,    setFreeLeft]    = useState<number | undefined>(undefined)
@@ -47,6 +49,13 @@ export default function Home() {
   const blockedRef = useRef(false)  // tracks if analysis was blocked by limit
   const [showPopup, setShowPopup] = useState(false)
   const [userIp,      setUserIp]      = useState('anonymous')
+  const [user,        setUser]        = useState<any>(null)
+  const [showLogin,   setShowLogin]   = useState(false)
+  const [loginEmail,  setLoginEmail]  = useState('')
+  const [loginOtp,    setLoginOtp]    = useState('')
+  const [loginStep,   setLoginStep]   = useState<'email'|'otp'>('email')
+  const [loginLoading,setLoginLoading]= useState(false)
+  const [loginError,  setLoginError]  = useState('')
 
   useEffect(() => {
     const seen = localStorage.getItem('bodyfitai_popup_seen')
@@ -55,6 +64,45 @@ export default function Home() {
       localStorage.setItem('bodyfitai_popup_seen', '1')
     }
   }, [])
+
+  useEffect(() => {
+    getUser().then(u => setUser(u))
+    // Auto open login if redirected from progress page
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('login') === '1') {
+        setShowLogin(true)
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
+
+  async function handleSendOTP() {
+    if (!loginEmail.trim() || !loginEmail.includes('@')) { setLoginError('Enter a valid email'); return }
+    setLoginLoading(true); setLoginError('')
+    const { error } = await sendOTP(loginEmail)
+    if (error) { setLoginError(error); setLoginLoading(false); return }
+    setLoginStep('otp'); setLoginLoading(false)
+  }
+
+  async function handleVerifyOTP() {
+    if (loginOtp.length !== 6) { setLoginError('Enter the 6-digit code'); return }
+    setLoginLoading(true); setLoginError('')
+    const { error } = await verifyOTP(loginEmail, loginOtp)
+    if (error) { setLoginError('Invalid or expired code'); setLoginLoading(false); return }
+    const u = await getUser()
+    setUser(u)
+    setShowLogin(false)
+    setLoginStep('email')
+    setLoginEmail('')
+    setLoginOtp('')
+    setLoginLoading(false)
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    setUser(null)
+  }
 
   function refreshUsage() {
     fetch('/api/usage')
@@ -159,6 +207,7 @@ export default function Home() {
         diet,
       }
 
+      setSavedMeasurements(measurements)
       const res  = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,19 +267,31 @@ export default function Home() {
                   Start over
                 </button>
             )}
-            {isPro
-                ? <span style={{ fontSize:11, background:'rgba(93,202,165,0.15)', color:'#5DCAA5', padding:'3px 10px', borderRadius:10, fontWeight:500 }}>Pro</span>
-                : (
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:11, color:'var(--text3)' }}>
-                  {freeLeft === undefined ? '' : freeLeft > 0 ? `${freeLeft} free left` : `${credits} credits`}
-                </span>
-                      <button onClick={() => { blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', color:'var(--accent)', padding:'3px 10px', borderRadius:10, cursor:'pointer', fontWeight:500 }}>
-                        {credits === 0 && freeLeft === 0 ? 'Buy credits' : '+ Add more'}
-                      </button>
-                    </div>
-                )
-            }
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              {isPro
+                  ? <span style={{ fontSize:11, background:'rgba(93,202,165,0.15)', color:'#5DCAA5', padding:'3px 10px', borderRadius:10, fontWeight:500 }}>Pro</span>
+                  : (
+                      <>
+                  <span style={{ fontSize:11, color:'var(--text3)' }}>
+                    {freeLeft === undefined ? '' : freeLeft > 0 ? `${freeLeft} free left` : `${credits} credits`}
+                  </span>
+                        <button onClick={() => { blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', color:'var(--accent)', padding:'3px 10px', borderRadius:10, cursor:'pointer', fontWeight:500 }}>
+                          {credits === 0 && freeLeft === 0 ? 'Buy credits' : '+ Add more'}
+                        </button>
+                      </>
+                  )
+              }
+              {user ? (
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <a href="/progress" style={{ fontSize:11, color:'var(--text3)', textDecoration:'none', padding:'3px 8px', border:'0.5px solid var(--border2)', borderRadius:8 }}>📊 Progress</a>
+                    <button onClick={handleSignOut} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
+                  </div>
+              ) : (
+                  <button onClick={() => setShowLogin(true)} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'0.5px solid var(--border2)', borderRadius:8, padding:'3px 10px', cursor:'pointer' }}>
+                    Login
+                  </button>
+              )}
+            </div>
           </div>
         </nav>
 
@@ -493,8 +554,59 @@ export default function Home() {
                 name={form.name}
                 isPro={isPro}
                 onUpgrade={() => setShowUpgrade(true)}
-                onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null) }}
+                measurements={savedMeasurements}
+                onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
             />
+        )}
+
+        {/* LOGIN MODAL */}
+        {showLogin && (
+            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
+              <div style={{ background:'#111', border:'0.5px solid #2a2a2a', borderRadius:16, padding:'28px 24px', maxWidth:360, width:'100%' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+                  <div>
+                    <div style={{ fontSize:11, color:'var(--accent)', fontWeight:500, letterSpacing:'0.06em', marginBottom:4 }}>
+                      {loginStep === 'email' ? 'LOGIN' : 'VERIFY EMAIL'}
+                    </div>
+                    <h2 style={{ fontSize:20, fontWeight:500, color:'var(--text)', marginBottom:4 }}>
+                      {loginStep === 'email' ? 'Welcome back' : 'Check your email'}
+                    </h2>
+                    <p style={{ fontSize:13, color:'var(--text2)' }}>
+                      {loginStep === 'email' ? 'Login to view your progress history' : `Code sent to ${loginEmail}`}
+                    </p>
+                  </div>
+                  <button onClick={() => { setShowLogin(false); setLoginStep('email'); setLoginError('') }} style={{ background:'none', border:'none', color:'#666', fontSize:22, cursor:'pointer' }}>×</button>
+                </div>
+                {loginStep === 'email' ? (
+                    <>
+                      <input type="email" placeholder="you@example.com" value={loginEmail}
+                             onChange={e => setLoginEmail(e.target.value)}
+                             onKeyDown={e => e.key==='Enter' && handleSendOTP()}
+                             style={{ width:'100%', background:'#1a1a1a', border:'0.5px solid #2a2a2a', borderRadius:8, padding:'11px 14px', color:'var(--text)', fontSize:14, marginBottom:10, boxSizing:'border-box' as const }}
+                      />
+                      {loginError && <div style={{ fontSize:12, color:'#e24b4a', marginBottom:8 }}>{loginError}</div>}
+                      <button onClick={handleSendOTP} disabled={loginLoading} style={{ width:'100%', background:'var(--accent)', border:'none', borderRadius:10, padding:'12px 0', fontSize:14, fontWeight:500, color:'#0a0a0a', cursor:'pointer' }}>
+                        {loginLoading ? 'Sending...' : 'Send code'}
+                      </button>
+                    </>
+                ) : (
+                    <>
+                      <input type="number" placeholder="123456" value={loginOtp}
+                             onChange={e => setLoginOtp(e.target.value.slice(0,6))}
+                             onKeyDown={e => e.key==='Enter' && handleVerifyOTP()}
+                             style={{ width:'100%', background:'#1a1a1a', border:'0.5px solid #2a2a2a', borderRadius:8, padding:'11px 14px', color:'var(--text)', fontSize:22, letterSpacing:8, textAlign:'center' as const, marginBottom:10, boxSizing:'border-box' as const }}
+                      />
+                      {loginError && <div style={{ fontSize:12, color:'#e24b4a', marginBottom:8 }}>{loginError}</div>}
+                      <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width:'100%', background:'var(--accent)', border:'none', borderRadius:10, padding:'12px 0', fontSize:14, fontWeight:500, color:'#0a0a0a', cursor:'pointer', marginBottom:8 }}>
+                        {loginLoading ? 'Verifying...' : 'Verify & login'}
+                      </button>
+                      <button onClick={() => { setLoginStep('email'); setLoginOtp(''); setLoginError('') }} style={{ width:'100%', background:'none', border:'none', color:'var(--text3)', fontSize:12, cursor:'pointer' }}>
+                        Use different email
+                      </button>
+                    </>
+                )}
+              </div>
+            </div>
         )}
 
         {/* COMING SOON POPUP */}
@@ -553,5 +665,4 @@ export default function Home() {
         )}
       </div>
   )
-
 }

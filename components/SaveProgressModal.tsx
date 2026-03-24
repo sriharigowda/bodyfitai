@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { sendOTP, verifyOTP, getUser } from '@/lib/auth'
 import { saveAnalysis, replaceSlot2AndShift } from '@/lib/userdata'
 import type { FitnessResults, Measurements } from '@/lib/calculations'
@@ -12,15 +12,27 @@ interface Props {
     onSaved: () => void
 }
 
-type Step = 'email' | 'otp' | 'confirm_replace' | 'saving' | 'saved'
+type Step = 'checking' | 'email' | 'otp' | 'confirm_replace' | 'saving' | 'saved'
 
 export default function SaveProgressModal({ onClose, measurements, results, aiInsights, onSaved }: Props) {
-    const [step,        setStep]        = useState<Step>('email')
+    const [step,        setStep]        = useState<Step>('checking')
     const [email,       setEmail]       = useState('')
     const [otp,         setOtp]         = useState('')
     const [loading,     setLoading]     = useState(false)
     const [error,       setError]       = useState('')
     const [replaceInfo, setReplaceInfo] = useState<{ date: string } | null>(null)
+
+    // Check if already logged in on mount
+    useEffect(() => {
+        getUser().then(user => {
+            if (user) {
+                // Already logged in — save directly
+                handleSave()
+            } else {
+                setStep('email')
+            }
+        })
+    }, [])
 
     async function handleSendOTP() {
         if (!email.trim() || !email.includes('@')) { setError('Enter a valid email'); return }
@@ -76,6 +88,14 @@ export default function SaveProgressModal({ onClose, measurements, results, aiIn
     return (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
             <div style={{ background:'#111', border:'0.5px solid #2a2a2a', borderRadius:16, padding:'28px 24px', maxWidth:380, width:'100%' }}>
+
+                {/* CHECKING STEP */}
+                {step === 'checking' && (
+                    <div style={{ textAlign:'center', padding:'20px 0' }}>
+                        <div style={{ width:32, height:32, border:'2px solid #2a2a2a', borderTopColor:'#e8ff47', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 12px' }}/>
+                        <p style={{ fontSize:13, color:'#888' }}>Checking login status...</p>
+                    </div>
+                )}
 
                 {/* EMAIL STEP */}
                 {step === 'email' && (<>

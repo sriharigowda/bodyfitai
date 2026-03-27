@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { getUser } from '@/lib/auth'
 
 interface Props {
   onClose: () => void
@@ -52,9 +53,13 @@ export default function UpgradeModal({ onClose, identifier, onSuccess, freeLeft 
         order_id:    order.orderId,
         theme:       { color: '#e8ff47' },
         handler: async (response: any) => {
+          const currentUser = await getUser()
+          const verifyHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (currentUser?.id) verifyHeaders['x-user-id'] = currentUser.id
+
           const verify = await fetch('/api/payment/verify', {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: verifyHeaders,
             body: JSON.stringify({
               razorpay_order_id:   response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,

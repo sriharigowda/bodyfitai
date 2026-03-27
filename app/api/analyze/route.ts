@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { jsonrepair } from 'jsonrepair'
 import { Measurements, FitnessResults, calculateResults } from '@/lib/calculations'
@@ -26,22 +27,42 @@ Return this exact JSON (fill in the string values, keep the structure exactly):
 // ─── PROMPT 2: Weekly diet plan ───────────────────────────────────────────────
 // Separate smaller call just for the diet plan
 function buildDietPrompt(m: Measurements, r: FitnessResults): string {
-  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+  const isFasting = ['Navratri fast','Ramadan','Ekadashi fast'].includes(m.diet.type)
+
+  if (isFasting) {
+    const fastingRules: Record<string, string> = {
+      'Navratri fast': 'Navratri fasting only: sabudana, kuttu atta, singhara flour, sama rice, fruits, milk, curd, sendha namak, potatoes, peanuts. No grains, no onion, no garlic.',
+      'Ramadan':       'Ramadan: Suhoor before dawn (high protein), Iftar breaking fast at sunset (dates, fruits, then full meal). Label breakfast as Suhoor and lunch as Iftar.',
+      'Ekadashi fast': 'Ekadashi fasting only: fruits, milk, sabudana, nuts, sweet potato, sendha namak. No grains, no pulses, no non-veg.',
+    }
+    const dayInstructions = DAYS.map(d =>
+        `"${d}":{"type":"fast","breakfast":"<fasting food ~cal>","lunch":"<fasting food ~cal>","dinner":"<fasting food ~cal>","snack":"<fasting snack ~cal>"}`
+    ).join(',')
+    return `You are a nutritionist. Return valid JSON only. No markdown.
+Create a 7-day ${m.diet.type} meal plan for ${m.name}.
+Daily targets: ${r.dailyCalories} kcal, ${r.protein}g protein, ${r.carbs}g carbs, ${r.fat}g fat.
+Rules: ${fastingRules[m.diet.type]}
+Replace every <...> with a REAL specific food following the fasting rules. Max 8 words per meal.
+Return this JSON: {${dayInstructions}}`
+  }
+
   const nonVeg = m.diet.nonVegDays
-  const dayTypes = days.map(d => {
+  const schedule = DAYS.map(d => {
     if (m.diet.type === 'Vegetarian') return `${d}:veg`
     if (m.diet.type === 'Non-vegetarian') return `${d}:non-veg`
     return `${d}:${nonVeg.includes(d) ? 'non-veg' : 'veg'}`
-  }).join(', ')
-
-  return `You are a nutritionist. Respond with a JSON object only. No markdown, no text outside the JSON.
-
-Create a 7-day meal plan for ${m.name}: ${r.dailyCalories} kcal/day, ${r.protein}g protein, ${r.carbs}g carbs, ${r.fat}g fat.
-Diet schedule: ${dayTypes}
-Indian food preferred. Keep meal descriptions SHORT (max 10 words each).
-
-Return this exact JSON structure (replace the placeholder text):
-{"Monday":{"type":"veg","breakfast":"food name ~Xkcal Xg protein","lunch":"food name ~Xkcal Xg protein","dinner":"food name ~Xkcal Xg protein","snack":"food name ~Xkcal"},"Tuesday":{"type":"non-veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."},"Wednesday":{"type":"veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."},"Thursday":{"type":"non-veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."},"Friday":{"type":"veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."},"Saturday":{"type":"non-veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."},"Sunday":{"type":"non-veg","breakfast":"...","lunch":"...","dinner":"...","snack":"..."}}`
+  })
+  const dayInstructions = schedule.map(s => {
+    const [day, type] = s.split(':')
+    return `"${day}":{"type":"${type}","breakfast":"<real ${type} Indian breakfast ~cal>","lunch":"<real ${type} Indian lunch ~cal>","dinner":"<real ${type} Indian dinner ~cal>","snack":"<real ${type} snack ~cal>"}`
+  }).join(',')
+  return `You are a nutritionist. Return valid JSON only. No markdown.
+Create a 7-day Indian meal plan for ${m.name}.
+Daily targets: ${r.dailyCalories} kcal, ${r.protein}g protein, ${r.carbs}g carbs, ${r.fat}g fat.
+Replace every <...> with a REAL specific Indian food and approximate calories. Max 8 words per meal.
+Return this JSON with real food for every single day:
+{${dayInstructions}}`
 }
 
 // ─── API CALLERS ──────────────────────────────────────────────────────────────
@@ -154,12 +175,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ results, aiInsights })
   } catch (error) {
-    console.error('Analysis error:', error)
-    const msgs: Record<string, string> = {
-      ollama: 'Ollama not responding. Run "ollama serve" in a terminal.',
-      groq:   'Groq API failed. Check your GROQ_API_KEY.',
-      claude: 'Claude API failed. Check your ANTHROPIC_API_KEY.',
-    }
-    return NextResponse.json({ error: msgs[PROVIDER] || 'Analysis failed.' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('Analysis error:', errMsg)
+    // Return the actual error message so we can debug
+    return NextResponse.json({
+      error: `Analysis failed: ${errMsg}`,
+    }, { status: 500 })
   }
 }

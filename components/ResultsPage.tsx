@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { FitnessResults, Goal, Measurements } from '@/lib/calculations'
+import { calculateBodyAge, calculateIdealMeasurements } from '@/lib/calculations'
 import DownloadReport from '@/components/DownloadReport'
 import dynamic from 'next/dynamic'
 const SaveProgressModal = dynamic(() => import('@/components/SaveProgressModal'), { ssr: false })
@@ -86,6 +87,12 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
     }, [])
 
     const firstName = name.split(' ')[0]
+    const bodyAge = r.bodyFatPercent && r.ffmi
+        ? calculateBodyAge(r.bmr > 0 ? Math.round(r.bmr / 10) : 25, r.bodyFatPercent, r.ffmi, 'Male')
+        : null
+    const ideal = r.leanMass > 0
+        ? calculateIdealMeasurements(r.leanMass > 0 ? 170 : 170, 'Male')
+        : null
 
     return (
         <>
@@ -228,6 +235,67 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                         </div>
                     ))}
                 </div>
+
+
+                {/* BODY AGE + IDEAL MEASUREMENTS */}
+                {bodyAge && bodyAge.bodyAge > 0 && (
+                    <>
+                        <SectionTitle>Body age</SectionTitle>
+                        <div style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '18px 16px', marginBottom: 10 }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                                <div>
+                                    <div style={{ fontSize:11, color:'var(--text3)', marginBottom:4 }}>YOUR BODY AGE</div>
+                                    <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
+                                        <span style={{ fontSize:36, fontWeight:500, color: (bodyAge?.difference ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{bodyAge?.bodyAge}</span>
+                                        <span style={{ fontSize:13, color:'var(--text3)' }}>years</span>
+                                    </div>
+                                </div>
+                                <div style={{ textAlign:'right' }}>
+                                    <div style={{ fontSize:11, color:'var(--text3)', marginBottom:4 }}>VS ACTUAL AGE</div>
+                                    <div style={{ fontSize:22, fontWeight:500, color: bodyAge.difference >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                        {(bodyAge?.difference ?? 0) >= 0 ? ((bodyAge?.difference ?? 0) + ' years younger') : (Math.abs(bodyAge?.difference ?? 0) + ' years older')}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ background: (bodyAge?.difference ?? 0) >= 0 ? 'rgba(93,202,165,0.08)' : 'rgba(240,149,149,0.08)', border: '0.5px solid ' + ((bodyAge?.difference ?? 0) >= 0 ? 'rgba(93,202,165,0.2)' : 'rgba(240,149,149,0.2)'), borderRadius:10, padding:'10px 14px' }}>
+                                <div style={{ fontSize:12, fontWeight:500, color: (bodyAge?.difference ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', marginBottom:4 }}>{bodyAge?.rating}</div>
+                                <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5 }}>{bodyAge?.message}</div>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {ideal && ideal.chest > 0 && (
+                    <>
+                        <SectionTitle>Ideal measurements — Steve Reeves formula</SectionTitle>
+                        <div style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 14, overflow:'hidden', marginBottom: 10 }}>
+                            <div style={{ padding:'10px 16px 4px', background:'rgba(232,255,71,0.04)', borderBottom:'0.5px solid rgba(255,255,255,0.06)' }}>
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', fontSize:10, color:'var(--text3)', fontWeight:500, letterSpacing:'0.05em' }}>
+                                    <span>MEASUREMENT</span><span style={{ textAlign:'center' }}>YOUR SIZE</span><span style={{ textAlign:'right' }}>IDEAL</span>
+                                </div>
+                            </div>
+                            {[
+                                { label:'Shoulder', yours: r.leanMass > 0 ? '—' : '—', ideal: `${ideal.shoulder}cm` },
+                                { label:'Chest',    yours: '—', ideal: `${ideal.chest}cm` },
+                                { label:'Waist',    yours: '—', ideal: `${ideal.waist}cm` },
+                                { label:'Hips',     yours: '—', ideal: `${ideal.hips}cm` },
+                                { label:'Biceps',   yours: '—', ideal: `${ideal.bicep}cm` },
+                                { label:'Forearm',  yours: '—', ideal: `${ideal.forearm}cm` },
+                                { label:'Thigh',    yours: '—', ideal: `${ideal.thigh}cm` },
+                                { label:'Calf',     yours: '—', ideal: `${ideal.calf}cm` },
+                            ].map((row, i) => (
+                                <div key={row.label} style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', padding:'9px 16px', borderBottom: i < 7 ? '0.5px solid rgba(255,255,255,0.05)' : 'none', background: i%2===0?'transparent':'rgba(255,255,255,0.01)' }}>
+                                    <span style={{ fontSize:13, color:'var(--text2)' }}>{row.label}</span>
+                                    <span style={{ fontSize:13, textAlign:'center', color:'var(--text2)' }}>{row.yours}</span>
+                                    <span style={{ fontSize:13, textAlign:'right', fontWeight:500, color:'var(--accent)' }}>{row.ideal}</span>
+                                </div>
+                            ))}
+                            <div style={{ padding:'10px 16px', background:'rgba(232,255,71,0.03)', borderTop:'0.5px solid rgba(255,255,255,0.06)' }}>
+                                <p style={{ fontSize:11, color:'var(--text3)', lineHeight:1.5 }}>Based on your height using the Steve Reeves golden ratio formula. These are aesthetic ideals — your personal goals may differ.</p>
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {/* SECTION 6 — TIMELINE */}
                 <SectionTitle>Timeline to reach goal</SectionTitle>

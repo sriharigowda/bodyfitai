@@ -1,7 +1,7 @@
 export type Gender = 'Male' | 'Female'
 export type ActivityLevel = 'Sedentary' | 'Lightly active' | 'Moderately active' | 'Very active'
 export type Goal = 'Weight loss' | 'Muscle gain' | 'Maintain weight' | 'Athletic performance'
-export type DietType = 'Vegetarian' | 'Non-vegetarian' | 'Mixed'
+export type DietType = 'Vegetarian' | 'Non-vegetarian' | 'Mixed' | 'Navratri fast' | 'Ramadan' | 'Ekadashi fast'
 
 export interface DietDays {
   type: DietType
@@ -216,4 +216,64 @@ export function calculateResults(m: Measurements): FitnessResults {
 export function convertToMetric(value: number, type: 'weight' | 'length'): number {
   if (type === 'weight') return parseFloat((value * 0.453592).toFixed(1))
   return parseFloat((value * 2.54).toFixed(1))
+}
+
+// ─── BODY AGE CALCULATOR ──────────────────────────────────────────────────────
+export function calculateBodyAge(age: number, bodyFatPercent: number, ffmi: number, gender: Gender): {
+  bodyAge: number
+  difference: number
+  message: string
+  rating: string
+} {
+  // Base adjustments from body fat (compared to ideal ranges)
+  const idealBFMale   = 15  // ideal body fat for males
+  const idealBFFemale = 22  // ideal body fat for females
+  const idealBF       = gender === 'Male' ? idealBFMale : idealBFFemale
+  const idealFFMI     = gender === 'Male' ? 22 : 18
+
+  // Body fat contribution (each % above ideal adds ~0.6 years, below subtracts)
+  const bfDiff    = bodyFatPercent - idealBF
+  const bfAgeAdj  = bfDiff * 0.6
+
+  // FFMI contribution (each point above ideal subtracts ~0.8 years)
+  const ffmiDiff  = ffmi - idealFFMI
+  const ffmiAdj   = ffmiDiff * 0.8
+
+  // Calculate body age
+  const bodyAge   = Math.round(Math.max(18, age + bfAgeAdj - ffmiAdj))
+  const difference = age - bodyAge
+
+  let message: string
+  let rating: string
+
+  if (difference >= 10) { message = 'Exceptional! Your body is significantly younger than your age.'; rating = 'Exceptional' }
+  else if (difference >= 5) { message = 'Great shape! Your body is noticeably younger than your age.'; rating = 'Excellent' }
+  else if (difference >= 1) { message = 'Good work! Your body is slightly younger than your age.'; rating = 'Good' }
+  else if (difference === 0) { message = 'Your body age matches your actual age.'; rating = 'Average' }
+  else if (difference >= -5) { message = 'Your body is slightly older than your age. Room to improve!'; rating = 'Below average' }
+  else { message = 'Your body is older than your age. Consistent training will help!'; rating = 'Needs work' }
+
+  return { bodyAge, difference, message, rating }
+}
+
+// ─── IDEAL MEASUREMENTS (Steve Reeves Formula) ────────────────────────────────
+export function calculateIdealMeasurements(heightCm: number, gender: Gender): {
+  chest: number; waist: number; hips: number
+  bicep: number; forearm: number; neck: number
+  thigh: number; calf: number; shoulder: number
+} {
+  // Steve Reeves golden ratio formula (adapted for both genders)
+  const factor = gender === 'Female' ? 0.88 : 1.0
+
+  return {
+    chest:    Math.round(heightCm * 0.61 * factor),
+    waist:    Math.round(heightCm * 0.41 * factor),
+    hips:     Math.round(heightCm * 0.51 * factor),
+    bicep:    Math.round(heightCm * 0.36 * factor),
+    forearm:  Math.round(heightCm * 0.29 * factor),
+    neck:     Math.round(heightCm * 0.27 * factor),
+    thigh:    Math.round(heightCm * 0.34 * factor),
+    calf:     Math.round(heightCm * 0.22 * factor),
+    shoulder: Math.round(heightCm * 0.76 * factor),
+  }
 }

@@ -15,54 +15,12 @@ const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sun
 export default function DownloadReport({ results, aiInsights, goal, name, isLoggedIn = false, onLogin }: Props) {
 
   async function handlePDFClick() {
+    console.log('[PDF] isLoggedIn:', isLoggedIn)
     if (isLoggedIn) {
-      // Free for logged in users
       await generatePDF()
     } else {
-      // ₹10 payment for unauth users
-      await handlePDFPayment()
-    }
-  }
-
-  async function handlePDFPayment() {
-    const btn = document.getElementById('pdf-btn') as HTMLButtonElement
-    if (btn) { btn.textContent = 'Loading...'; btn.disabled = true }
-    try {
-      // Load Razorpay
-      if (!(window as any).Razorpay) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script')
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-          script.onload = () => resolve()
-          script.onerror = () => reject()
-          document.head.appendChild(script)
-        })
-      }
-      // Create order
-      const res = await fetch('/api/payment/pdf', { method: 'POST' })
-      const order = await res.json()
-      if (order.error) throw new Error(order.error)
-
-      const options = {
-        key:         order.keyId,
-        amount:      order.amount,
-        currency:    order.currency,
-        name:        'BodyFitAI',
-        description: 'PDF Report Download',
-        order_id:    order.orderId,
-        theme:       { color: '#e8ff47' },
-        handler: async () => {
-          if (btn) { btn.textContent = 'Generating PDF...'; }
-          await generatePDF()
-        },
-      }
-      const rzp = new (window as any).Razorpay(options)
-      rzp.open()
-    } catch (err) {
-      console.error('PDF payment error:', err)
-      alert('Payment failed. Please try again.')
-    } finally {
-      if (btn) { btn.disabled = false }
+      console.log('[PDF] Not logged in, showing login popup')
+      onLogin?.()
     }
   }
 
@@ -370,7 +328,7 @@ export default function DownloadReport({ results, aiInsights, goal, name, isLogg
       console.error('PDF error:', err)
       alert('PDF generation failed: ' + (err as Error).message)
     } finally {
-      if (btn) { btn.textContent = 'Download PDF Report'; btn.disabled = false }
+      if (btn) { btn.textContent = isLoggedIn ? 'Download PDF Report — Free' : 'Login to Download PDF'; btn.disabled = false }
     }
   }
 
@@ -400,7 +358,7 @@ export default function DownloadReport({ results, aiInsights, goal, name, isLogg
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        Download PDF Report
+        {isLoggedIn ? 'Download PDF Report — Free' : 'Login to Download PDF'}
       </button>
   )
 }

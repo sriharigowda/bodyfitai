@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { getUser, sendOTP, verifyOTP, signOut } from '@/lib/auth'
+import { getProfile, saveProfile } from '@/lib/profile'
 import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
+import { calculateBodyAge, calculateIdealMeasurements } from '@/lib/calculations'
 import ResultsPage from '@/components/ResultsPage'
 import UpgradeModal from '@/components/UpgradeModal'
 
@@ -66,7 +68,20 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    getUser().then(u => setUser(u))
+    // Load user and profile name on mount
+    getUser().then(async u => {
+      setUser(u)
+      if (u) {
+        const profile = await getProfile()
+        if (profile?.name) {
+          setForm(f => ({ ...f, name: profile.name }))
+        }
+      } else {
+        // Fallback to localStorage for guests
+        const savedName = localStorage.getItem('bodyfitai_user_name')
+        if (savedName) setForm(f => ({ ...f, name: savedName }))
+      }
+    })
     // Auto open login if redirected from progress page
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -92,6 +107,13 @@ export default function Home() {
     if (error) { setLoginError('Invalid or expired code'); setLoginLoading(false); return }
     const u = await getUser()
     setUser(u)
+    if (u) {
+      // Load name from profile after login
+      const profile = await getProfile()
+      if (profile?.name) {
+        setForm(f => ({ ...f, name: profile.name }))
+      }
+    }
     setShowLogin(false)
     setLoginStep('email')
     setLoginEmail('')
@@ -106,7 +128,10 @@ export default function Home() {
 
   async function refreshUsage() {
     try {
-      const r = await fetch('/api/usage')
+      const headers: Record<string, string> = {}
+      const u = await getUser()
+      if (u?.id) headers['x-user-id'] = u.id
+      const r = await fetch('/api/usage', { headers })
       const d = await r.json()
       setFreeLeft(d.freeLeft ?? 0)
       setCredits(d.credits ?? 0)
@@ -158,8 +183,25 @@ export default function Home() {
     return Object.keys(e).length === 0
   }
 
-  const tryNext    = (n: number) => { if (validate(n - 1)) setStep(n) }
-  const tryAnalyze = ()          => { if (validate(4)) runAnalysis() }
+  const tryNext = (n: number) => {
+    if (!validate(n - 1)) return
+    if (n === 2 && form.name.trim()) {
+      // Save to localStorage always
+      localStorage.setItem('bodyfitai_user_name', form.name.trim())
+      // Save to Supabase if logged in
+      if (user) void saveProfile(form.name.trim())
+    }
+    setStep(n)
+  }
+  const tryAnalyze = () => {
+    if (!validate(4)) return
+    // If not logged in and no free analyses left → show login popup
+    if (!user && freeLeft !== undefined && freeLeft <= 0) {
+      setShowLogin(true)
+      return
+    }
+    void runAnalysis()
+  }
 
   const toM = (v: string, t: 'weight' | 'length') => {
     const n = parseFloat(v) || 0
@@ -207,18 +249,32 @@ export default function Home() {
       }
 
       setSavedMeasurements(measurements)
+      if (measurements.name) {
+        localStorage.setItem('bodyfitai_user_name', measurements.name)
+        if (user) void saveProfile(measurements.name)
+      }
+      const analyzeHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      const currentUser = await getUser()
+      if (currentUser?.id) analyzeHeaders['x-user-id'] = currentUser.id
+
       const res  = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: analyzeHeaders,
         body: JSON.stringify({ measurements }),
       })
       const data = await res.json()
       clearInterval(iv)
 
       if (data.error === 'FREE_LIMIT_REACHED') {
-        setScreen('form')  // keep form data intact
-        blockedRef.current = true
-        setShowUpgrade(true)
+        setScreen('form')
+        if (!user) {
+          // Not logged in → show login
+          setShowLogin(true)
+        } else {
+          // Logged in but no credits → show upgrade
+          blockedRef.current = true
+          setShowUpgrade(true)
+        }
         return
       }
       if (data.error) {
@@ -379,8 +435,34 @@ export default function Home() {
                       ))}
                     </div>
                     <div style={{ marginBottom:14 }}>
-                      <label style={{ fontSize:12, color:fieldErrors.name?'#e24b4a':'var(--text2)', display:'block', marginBottom:6 }}>Full name *</label>
-                      <input placeholder="e.g. Srini Kumar" value={form.name} onChange={e => setF('name', e.target.value)} style={{ border:eb('name'), background:ebg('name') }} />
+                      {user && form.name ? (
+                          // Logged in with saved name — show display card
+                          <div style={{ background:'rgba(232,255,71,0.05)', border:'0.5px solid rgba(232,255,71,0.18)', borderRadius:12, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                            <div>
+                              <div style={{ fontSize:11, color:'var(--accent)', fontWeight:500, letterSpacing:'0.05em', marginBottom:2 }}>WELCOME BACK</div>
+                              <div style={{ fontSize:16, fontWeight:500, color:'var(--text)' }}>{form.name}</div>
+                            </div>
+                            <button onClick={() => setF('name', '')} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'4px 10px', cursor:'pointer' }}>
+                              Change
+                            </button>
+                          </div>
+                      ) : (
+                          // Guest or name cleared — show input
+                          <>
+                            <label style={{ fontSize:12, color:fieldErrors.name?'#e24b4a':'var(--text2)', display:'block', marginBottom:6 }}>Full name *</label>
+                            <input
+                                placeholder="e.g. Srini Kumar"
+                                value={form.name}
+                                onChange={e => setF('name', e.target.value)}
+                                style={{ border:eb('name'), background:ebg('name') }}
+                            />
+                            {!user && (
+                                <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>
+                                  Login to save your progress after analysis
+                                </div>
+                            )}
+                          </>
+                      )}
                       <FE k="name" />
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
@@ -510,10 +592,10 @@ export default function Home() {
                     <div style={{ marginBottom:16 }}>
                       <label style={{ fontSize:12, color:'var(--text2)', display:'block', marginBottom:10 }}>Diet type</label>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-                        {(['Vegetarian','Non-vegetarian','Mixed'] as DietType[]).map(d => (
+                        {(['Vegetarian','Non-vegetarian','Mixed','Navratri fast','Ramadan','Ekadashi fast'] as DietType[]).map(d => (
                             <div key={d} onClick={() => setDietType(d)} style={{ background:dietType===d?'var(--accent-dim)':'var(--bg2)', border:`0.5px solid ${dietType===d?'var(--accent)':'var(--border)'}`, borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'center' }}>
-                              <div style={{ fontSize:18, marginBottom:4 }}>{d==='Vegetarian'?'🥗':d==='Non-vegetarian'?'🍗':'🔀'}</div>
-                              <div style={{ fontSize:11, fontWeight:500, color:dietType===d?'var(--accent)':'var(--text2)' }}>{d==='Non-vegetarian'?'Non-veg':d}</div>
+                              <div style={{ fontSize:18, marginBottom:4 }}>{d==='Vegetarian'?'🥗':d==='Non-vegetarian'?'🍗':d==='Navratri fast'?'🪔':d==='Ramadan'?'🌙':d==='Ekadashi fast'?'✨':'🔀'}</div>
+                              <div style={{ fontSize:11, fontWeight:500, color:dietType===d?'var(--accent)':'var(--text2)' }}>{d==='Non-vegetarian'?'Non-veg':d==='Navratri fast'?'Navratri':d==='Ekadashi fast'?'Ekadashi':d}</div>
                             </div>
                         ))}
                       </div>

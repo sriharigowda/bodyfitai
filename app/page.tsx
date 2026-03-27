@@ -104,20 +104,19 @@ export default function Home() {
     setUser(null)
   }
 
-  function refreshUsage() {
-    fetch('/api/usage')
-        .then(r => r.json())
-        .then(d => {
-          setFreeLeft(d.freeLeft ?? 1)
-          setCredits(d.credits ?? 0)
-          setIsPro(d.isPro ?? false)
-          if (d.identifier) setUserIp(d.identifier)
-        })
-        .catch(() => {})
+  async function refreshUsage() {
+    try {
+      const r = await fetch('/api/usage')
+      const d = await r.json()
+      setFreeLeft(d.freeLeft ?? 0)
+      setCredits(d.credits ?? 0)
+      setIsPro(d.isPro ?? false)
+      if (d.identifier) setUserIp(d.identifier)
+    } catch {}
   }
 
   useEffect(() => {
-    refreshUsage()
+    void refreshUsage()
   }, [])
 
   const u  = (lbl: string) => `${lbl} (${unit==='metric'?'cm':'in'})`
@@ -230,7 +229,8 @@ export default function Home() {
 
       setApiData(data)
       setScreen('results')
-      refreshUsage()  // update credits display after analysis
+      // Sync with server immediately after analysis
+      await refreshUsage()
     } catch {
       clearInterval(iv)
       setError('Something went wrong. Please try again.')
@@ -244,15 +244,15 @@ export default function Home() {
   const FE        = ({ k }: { k: string }) =>
       fieldErrors[k] ? <div style={{ fontSize:11, color:'#e24b4a', marginTop:4 }}>{fieldErrors[k]}</div> : null
   const hasErr    = Object.keys(fieldErrors).length > 0
-  const backS     = { flex:1, background:'transparent', border:'0.5px solid var(--border2)', borderRadius:10, padding:12, color:'var(--text2)', fontSize:14, cursor:'pointer' } as const
-  const nextS     = { flex:2, background:'var(--accent)', border:'none', borderRadius:10, padding:12, color:'#0a0a0a', fontSize:14, fontWeight:500, cursor:'pointer' } as const
+  const backS     = { flex:1, background:'rgba(255,255,255,0.03)', backdropFilter:'blur(12px)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:12, color:'var(--text2)', fontSize:14, cursor:'pointer' } as const
+  const nextS     = { flex:2, background:'var(--accent)', border:'none', borderRadius:12, padding:12, color:'#0a0a0a', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 0 24px rgba(232,255,71,0.18)' } as const
 
 
   return (
       <div style={{ minHeight:'100vh', background:'var(--bg)' }}>
 
         {/* NAV */}
-        <nav style={{ background:'var(--bg2)', borderBottom:'0.5px solid var(--border)', padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10 }}>
+        <nav style={{ background:'rgba(6,6,6,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.06)', padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10 }}>
           <div style={{ fontSize:18, fontWeight:500, letterSpacing:'-0.3px', cursor:'pointer' }}
                onClick={() => { setScreen('home'); setStep(1) }}>
             <span style={{ color:'var(--text)' }}>Body</span>
@@ -268,26 +268,28 @@ export default function Home() {
                 </button>
             )}
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              {isPro
-                  ? <span style={{ fontSize:11, background:'rgba(93,202,165,0.15)', color:'#5DCAA5', padding:'3px 10px', borderRadius:10, fontWeight:500 }}>Pro</span>
-                  : (
-                      <>
+              {/* Credits counter — show for all users */}
+              {freeLeft !== undefined && (
                   <span style={{ fontSize:11, color:'var(--text3)' }}>
-                    {freeLeft === undefined ? '' : freeLeft > 0 ? `${freeLeft} free left` : `${credits} credits`}
-                  </span>
-                        <button onClick={() => { blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', color:'var(--accent)', padding:'3px 10px', borderRadius:10, cursor:'pointer', fontWeight:500 }}>
-                          {credits === 0 && freeLeft === 0 ? 'Buy credits' : '+ Add more'}
-                        </button>
-                      </>
-                  )
-              }
+                {freeLeft > 0 ? `${freeLeft} free left` : credits > 0 ? `${credits} credits` : '0 left'}
+              </span>
+              )}
+
               {user ? (
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <a href="/progress" style={{ fontSize:11, color:'var(--text3)', textDecoration:'none', padding:'3px 8px', border:'0.5px solid var(--border2)', borderRadius:8 }}>📊 Progress</a>
+                  <>
+                    {isPro
+                        ? <span style={{ fontSize:11, background:'rgba(93,202,165,0.12)', color:'#5DCAA5', padding:'3px 10px', borderRadius:20, fontWeight:500, border:'0.5px solid rgba(93,202,165,0.2)' }}>Pro</span>
+                        : (
+                            <button onClick={() => { blockedRef.current = false; setShowUpgrade(true) }} style={{ fontSize:11, background:'rgba(232,255,71,0.06)', border:'0.5px solid rgba(232,255,71,0.20)', color:'var(--accent)', padding:'3px 10px', borderRadius:20, cursor:'pointer', fontWeight:500 }}>
+                              {credits === 0 && freeLeft === 0 ? 'Buy credits' : '+ Add more'}
+                            </button>
+                        )
+                    }
+                    <a href="/progress" style={{ fontSize:11, color:'var(--text3)', textDecoration:'none', padding:'3px 10px', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:20, background:'rgba(255,255,255,0.03)' }}>📊 Progress</a>
                     <button onClick={handleSignOut} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
-                  </div>
+                  </>
               ) : (
-                  <button onClick={() => setShowLogin(true)} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'0.5px solid var(--border2)', borderRadius:8, padding:'3px 10px', cursor:'pointer' }}>
+                  <button onClick={() => setShowLogin(true)} style={{ fontSize:11, color:'var(--accent)', background:'rgba(232,255,71,0.06)', border:'0.5px solid rgba(232,255,71,0.20)', borderRadius:20, padding:'5px 14px', cursor:'pointer', fontWeight:500 }}>
                     Login
                   </button>
               )}
@@ -296,7 +298,7 @@ export default function Home() {
         </nav>
 
         {/* COMING SOON BANNER */}
-        <div style={{ background:'linear-gradient(90deg,#1a2a00,#0a1a00,#1a2a00)', borderBottom:'0.5px solid rgba(232,255,71,0.2)', padding:'8px 20px', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+        <div style={{ background:'rgba(232,255,71,0.03)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', borderBottom:'0.5px solid rgba(232,255,71,0.10)', padding:'8px 20px', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
           <span style={{ fontSize:11, background:'rgba(232,255,71,0.15)', color:'#e8ff47', padding:'2px 8px', borderRadius:10, fontWeight:500, letterSpacing:'0.04em' }}>COMING SOON</span>
           <span style={{ fontSize:12, color:'#a0b060' }}>Save your results · Weekly body tracking · Progress history</span>
           <span style={{ fontSize:12, color:'#e8ff47', marginLeft:4 }}>🚀</span>
@@ -306,7 +308,7 @@ export default function Home() {
         {screen === 'home' && (
             <div style={{ maxWidth:480, margin:'0 auto', padding:'40px 20px' }}>
               <div className="fade-up" style={{ textAlign:'center', marginBottom:40 }}>
-                <div style={{ display:'inline-block', background:'var(--accent-dim)', border:'0.5px solid var(--accent-border)', borderRadius:20, padding:'4px 14px', fontSize:12, color:'var(--accent)', fontWeight:500, marginBottom:20, letterSpacing:'0.04em' }}>
+                <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(232,255,71,0.06)', border:'0.5px solid rgba(232,255,71,0.15)', borderRadius:20, padding:'5px 14px', fontSize:11, color:'var(--accent)', fontWeight:500, marginBottom:20, letterSpacing:'0.04em' }}>
                   AI-POWERED FITNESS ANALYSIS
                 </div>
                 <h1 style={{ fontSize:36, fontWeight:500, lineHeight:1.2, marginBottom:14, letterSpacing:'-0.5px' }}>
@@ -316,16 +318,18 @@ export default function Home() {
                 <p style={{ fontSize:15, color:'var(--text2)', lineHeight:1.7, margin:'0 auto 32px', maxWidth:360 }}>
                   Enter your body measurements and get a personalized calorie target, macro split, FFMI score, and full diet plan.
                 </p>
-                <button onClick={() => setScreen('form')} style={{ background:'var(--accent)', color:'#0a0a0a', border:'none', padding:'14px 40px', borderRadius:10, fontSize:15, fontWeight:500, cursor:'pointer', width:'100%', maxWidth:300, display:'block', margin:'0 auto 12px' }}>
+                <button onClick={() => setScreen('form')} style={{ background:'var(--accent)', color:'#0a0a0a', border:'none', padding:'15px 40px', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', width:'100%', maxWidth:300, display:'block', margin:'0 auto 12px', boxShadow:'0 0 40px rgba(232,255,71,0.20)' }}>
                   Get my free plan
                 </button>
-                {!isPro && (
-                    <p style={{ fontSize:12, color:'var(--text3)', marginTop:8 }}>
-                      {freeLeft === undefined ? '' : freeLeft > 0
-                          ? `${freeLeft} free ${freeLeft === 1 ? 'analysis' : 'analyses'} remaining`
-                          : credits > 0 ? `${credits} credits available` : '0 analyses left — buy credits to continue'}
-                    </p>
-                )}
+                <p style={{ fontSize:12, color:'var(--text3)', marginTop:8 }}>
+                  {!user
+                      ? '1 free analysis · No account needed'
+                      : isPro ? 'Unlimited analyses'
+                          : freeLeft === undefined ? ''
+                              : freeLeft > 0 ? `${freeLeft} free ${freeLeft === 1 ? 'analysis' : 'analyses'} remaining`
+                                  : credits > 0 ? `${credits} credits remaining`
+                                      : 'No analyses left'}
+                </p>
               </div>
               <div className="fade-up-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 {[
@@ -334,8 +338,8 @@ export default function Home() {
                   { title:'Macro split',       desc:'Protein, carbs, fat & fiber' },
                   { title:'Diet plan',         desc:'Veg/non-veg day-by-day' },
                 ].map((f, i) => (
-                    <div key={i} style={{ background:'var(--bg2)', border:'0.5px solid var(--border)', borderRadius:12, padding:'16px 14px' }}>
-                      <div style={{ width:28, height:28, background:'var(--accent-dim)', borderRadius:6, marginBottom:8 }} />
+                    <div key={i} style={{ background:'rgba(255,255,255,0.03)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 14px' }}>
+                      <div style={{ width:28, height:28, background:'rgba(232,255,71,0.08)', border:'0.5px solid rgba(232,255,71,0.12)', borderRadius:8, marginBottom:8 }} />
                       <div style={{ fontSize:13, fontWeight:500, marginBottom:4 }}>{f.title}</div>
                       <div style={{ fontSize:11, color:'var(--text3)', lineHeight:1.4 }}>{f.desc}</div>
                     </div>
@@ -348,7 +352,7 @@ export default function Home() {
         {screen === 'form' && (
             <div style={{ maxWidth:480, margin:'0 auto', padding:'24px 20px' }}>
               <div style={{ height:3, background:'var(--border)', borderRadius:2, marginBottom:28 }}>
-                <div style={{ height:3, background:'var(--accent)', borderRadius:2, width:progress, transition:'width 0.3s' }} />
+                <div style={{ height:3, background:'linear-gradient(90deg,var(--accent),#b8ff00)', borderRadius:2, width:progress, transition:'width 0.3s', boxShadow:'0 0 10px rgba(232,255,71,0.4)' }} />
               </div>
               {error && (
                   <div style={{ background:'#2a1010', border:'0.5px solid #5a2020', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#f09595' }}>
@@ -553,7 +557,9 @@ export default function Home() {
                 goal={goal}
                 name={form.name}
                 isPro={isPro}
+                isLoggedIn={!!user}
                 onUpgrade={() => setShowUpgrade(true)}
+                onLogin={() => setShowLogin(true)}
                 measurements={savedMeasurements}
                 onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
             />
@@ -655,7 +661,7 @@ export default function Home() {
                   setShowUpgrade(false)
                   const wasBlocked = blockedRef.current
                   blockedRef.current = false
-                  refreshUsage()  // update credits after payment
+                  void refreshUsage()  // update credits after payment
                   // Only re-run analysis if user was blocked mid-analysis
                   if (wasBlocked) {
                     setTimeout(() => void runAnalysis(), 300)

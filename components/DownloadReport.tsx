@@ -6,11 +6,65 @@ interface Props {
   aiInsights: any
   goal: Goal
   name?: string
+  isLoggedIn?: boolean
+  onLogin?: () => void
 }
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
-export default function DownloadReport({ results, aiInsights, goal, name }: Props) {
+export default function DownloadReport({ results, aiInsights, goal, name, isLoggedIn = false, onLogin }: Props) {
+
+  async function handlePDFClick() {
+    if (isLoggedIn) {
+      // Free for logged in users
+      await generatePDF()
+    } else {
+      // ₹10 payment for unauth users
+      await handlePDFPayment()
+    }
+  }
+
+  async function handlePDFPayment() {
+    const btn = document.getElementById('pdf-btn') as HTMLButtonElement
+    if (btn) { btn.textContent = 'Loading...'; btn.disabled = true }
+    try {
+      // Load Razorpay
+      if (!(window as any).Razorpay) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+          script.onload = () => resolve()
+          script.onerror = () => reject()
+          document.head.appendChild(script)
+        })
+      }
+      // Create order
+      const res = await fetch('/api/payment/pdf', { method: 'POST' })
+      const order = await res.json()
+      if (order.error) throw new Error(order.error)
+
+      const options = {
+        key:         order.keyId,
+        amount:      order.amount,
+        currency:    order.currency,
+        name:        'BodyFitAI',
+        description: 'PDF Report Download',
+        order_id:    order.orderId,
+        theme:       { color: '#e8ff47' },
+        handler: async () => {
+          if (btn) { btn.textContent = 'Generating PDF...'; }
+          await generatePDF()
+        },
+      }
+      const rzp = new (window as any).Razorpay(options)
+      rzp.open()
+    } catch (err) {
+      console.error('PDF payment error:', err)
+      alert('Payment failed. Please try again.')
+    } finally {
+      if (btn) { btn.disabled = false }
+    }
+  }
 
   async function generatePDF() {
     // Show loading state on button
@@ -321,32 +375,32 @@ export default function DownloadReport({ results, aiInsights, goal, name }: Prop
   }
 
   return (
-    <button
-      id="pdf-btn"
-      onClick={generatePDF}
-      style={{
-        width: '100%',
-        background: 'var(--accent)',
-        border: 'none',
-        borderRadius: 10,
-        padding: '13px 0',
-        color: '#0a0a0a',
-        fontSize: 14,
-        fontWeight: 500,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 10,
-      }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Download PDF Report
-    </button>
+      <button
+          id="pdf-btn"
+          onClick={generatePDF}
+          style={{
+            width: '100%',
+            background: 'var(--accent)',
+            border: 'none',
+            borderRadius: 10,
+            padding: '13px 0',
+            color: '#0a0a0a',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginBottom: 10,
+          }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download PDF Report
+      </button>
   )
 }

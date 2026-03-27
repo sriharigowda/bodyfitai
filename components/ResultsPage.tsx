@@ -26,13 +26,15 @@ interface Props {
     isPro?: boolean
     onUpgrade?: () => void
     measurements?: Measurements
+    isLoggedIn?: boolean
+    onLogin?: () => void
 }
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
 function Card({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
     return (
-        <div style={{ background: accent ? 'var(--accent-dim)' : 'var(--bg2)', border: `0.5px solid ${accent ? 'var(--accent-border)' : 'var(--border)'}`, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+        <div style={{ background: accent ? 'rgba(232,255,71,0.05)' : 'rgba(255,255,255,0.04)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border: `0.5px solid ${accent ? 'rgba(232,255,71,0.18)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
             {children}
         </div>
     )
@@ -63,7 +65,7 @@ function MetricRow({ label, current, target, currentColor }: { label: string; cu
 
 function ExplainCard({ title, text, color }: { title: string; text: string; color: string }) {
     return (
-        <div style={{ background: 'var(--bg2)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 14, overflow: 'hidden', marginBottom: 10 }}>
             <div style={{ background: color, padding: '6px 14px' }}>
                 <span style={{ fontSize: 11, fontWeight: 500, color: '#0a0a0a', letterSpacing: '0.04em' }}>{title}</span>
             </div>
@@ -72,7 +74,7 @@ function ExplainCard({ title, text, color }: { title: string; text: string; colo
     )
 }
 
-export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart, isPro = false, onUpgrade, measurements }: Props) {
+export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart, isPro = false, onUpgrade, measurements, isLoggedIn = false, onLogin }: Props) {
     const [showSaveModal, setShowSaveModal] = useState(false)
     const [saved,         setSaved]         = useState(false)
     const [hasSaved,      setHasSaved]      = useState(false)
@@ -90,7 +92,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
             <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 20px 48px' }}>
 
                 {/* Greeting */}
-                <div className="fade-up" style={{ background: 'var(--accent-dim)', border: '0.5px solid var(--accent-border)', borderRadius: 14, padding: '16px 18px', marginBottom: 20 }}>
+                <div className="fade-up" style={{ background: 'rgba(232,255,71,0.05)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border: '0.5px solid rgba(232,255,71,0.18)', borderRadius: 16, padding: '16px 18px', marginBottom: 20 }}>
                     <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500, letterSpacing: '0.06em', marginBottom: 6 }}>YOUR REPORT</div>
                     <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text)', marginBottom: 6 }}>Hi {firstName}! 👋</h2>
                     <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6, marginBottom: 8 }}>{ai.greeting}</p>
@@ -154,7 +156,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                         { label: 'Fat',            value: `${r.fat}g`,                      unit: '/day',  color: 'var(--red)' },
                         { label: 'Fiber',          value: `${r.fiber}g`,                    unit: '/day',  color: 'var(--blue)' },
                     ].map(m => (
-                        <div key={m.label} style={{ background: 'var(--bg2)', border: '0.5px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+                        <div key={m.label} style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '12px 14px' }}>
                             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{m.label}</div>
                             <div style={{ fontSize: 20, fontWeight: 500, color: m.color }}>{m.value}<span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 2 }}>{m.unit}</span></div>
                         </div>
@@ -164,14 +166,20 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                 {/* SECTION 4 — WEEKLY DIET PLAN */}
                 <SectionTitle>Weekly diet plan</SectionTitle>
                 {!isPro ? (
-                    <div style={{ position:'relative', marginBottom:10 }}>
-                        <div style={{ background:'var(--bg2)', border:'0.5px solid var(--border)', borderRadius:12, padding:40, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-                            <div style={{ fontSize:22 }}>🔒</div>
-                            <div style={{ fontSize:14, fontWeight:500, color:'var(--text)', textAlign:'center' }}>Pro feature</div>
-                            <div style={{ fontSize:12, color:'var(--text2)', textAlign:'center' }}>Buy credits to unlock diet plan, PDF report and more</div>
-                            <button onClick={onUpgrade} style={{ background:'var(--accent)', border:'none', borderRadius:8, padding:'9px 20px', fontSize:13, fontWeight:500, color:'#0a0a0a', cursor:'pointer', marginTop:4 }}>
-                                Buy credits — from ₹29
-                            </button>
+                    <div style={{ marginBottom:10 }}>
+                        <div style={{ background:'rgba(255,255,255,0.04)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'32px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:10, textAlign:'center' }}>
+                            <div style={{ fontSize:28 }}>🔒</div>
+                            <div style={{ fontSize:14, fontWeight:500, color:'var(--text)' }}>Unlock weekly diet plan</div>
+                            <div style={{ fontSize:12, color:'var(--text2)', maxWidth:260, lineHeight:1.6 }}>Buy credits to unlock diet plan, PDF report and more</div>
+                            {!isLoggedIn ? (
+                                <button onClick={() => onLogin?.()} style={{ background:'var(--accent)', border:'none', borderRadius:10, padding:'11px 28px', fontSize:13, fontWeight:600, color:'#0a0a0a', cursor:'pointer', marginTop:4, boxShadow:'0 0 24px rgba(232,255,71,0.20)' }}>
+                                    Login to unlock →
+                                </button>
+                            ) : (
+                                <button onClick={onUpgrade} style={{ background:'var(--accent)', border:'none', borderRadius:10, padding:'11px 28px', fontSize:13, fontWeight:600, color:'#0a0a0a', cursor:'pointer', marginTop:4, boxShadow:'0 0 24px rgba(232,255,71,0.20)' }}>
+                                    Buy credits — from ₹29
+                                </button>
+                            )}
                         </div>
                     </div>
                 ) : (
@@ -181,7 +189,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                             if (!plan) return null
                             const isVeg = plan.type?.toLowerCase().includes('veg') && !plan.type?.toLowerCase().includes('non')
                             return (
-                                <div key={day} style={{ background: 'var(--bg2)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                                <div key={day} style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', border: '0.5px solid rgba(255,255,255,0.07)', borderRadius: 14, overflow: 'hidden' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderBottom: '0.5px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
                                         <span style={{ fontSize: 13, fontWeight: 500 }}>{day}</span>
                                         <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: isVeg ? 'rgba(93,202,165,0.15)' : 'rgba(240,149,149,0.15)', color: isVeg ? 'var(--green)' : 'var(--red)' }}>
@@ -214,7 +222,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                 <SectionTitle>Nutrition tips</SectionTitle>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {ai.nutritionTips.map((tip, i) => (
-                        <div key={i} style={{ background: 'var(--bg2)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '11px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <div key={i} style={{ background: 'rgba(255,255,255,0.04)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', border: '0.5px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '11px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', marginTop: 5, flexShrink: 0 }} />
                             <span style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>{tip}</span>
                         </div>
@@ -223,7 +231,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
 
                 {/* SECTION 6 — TIMELINE */}
                 <SectionTitle>Timeline to reach goal</SectionTitle>
-                <div style={{ background: 'var(--accent-dim)', border: '0.5px solid var(--accent-border)', borderRadius: 12, padding: '16px', marginBottom: 10 }}>
+                <div style={{ background: 'rgba(232,255,71,0.04)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border: '0.5px solid rgba(232,255,71,0.15)', borderRadius: 16, padding: '16px', marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
                         <div>
                             <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 2 }}>ESTIMATED TIME</div>
@@ -274,7 +282,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                                 <a href="/progress" style={{ fontSize:12, color:'var(--accent)', textDecoration:'none', fontWeight:500 }}>View progress →</a>
                             </div>
                         ) : (
-                            <button onClick={() => setShowSaveModal(true)} style={{ width:'100%', background:'rgba(232,255,71,0.08)', border:'0.5px solid rgba(232,255,71,0.3)', borderRadius:10, padding:'13px 0', color:'var(--accent)', fontSize:14, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                            <button onClick={() => setShowSaveModal(true)} style={{ width:'100%', background:'rgba(232,255,71,0.06)', backdropFilter:'blur(12px)', border:'0.5px solid rgba(232,255,71,0.22)', borderRadius:12, padding:'13px 0', color:'var(--accent)', fontSize:14, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 0 20px rgba(232,255,71,0.06)' }}>
                                 💾 Save my progress
                             </button>
                         )}
@@ -286,18 +294,12 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                     </div>
                 )}
 
-                {/* Download PDF */}
-                {isPro ? (
-                    <div style={{ marginBottom: 10 }}>
-                        <DownloadReport results={r} aiInsights={ai as any} goal={goal} name={name} />
-                    </div>
-                ) : (
-                    <button onClick={onUpgrade} style={{ width:'100%', background:'var(--bg2)', border:'0.5px solid var(--border2)', borderRadius:10, padding:'13px 0', color:'var(--text2)', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:10 }}>
-                        🔒 Download PDF Report — Buy credits to unlock
-                    </button>
-                )}
+                {/* Download PDF — always visible, handles payment internally */}
+                <div style={{ marginBottom: 10 }}>
+                    <DownloadReport results={r} aiInsights={ai as any} goal={goal} name={name} isLoggedIn={isLoggedIn} onLogin={onLogin} />
+                </div>
 
-                <button onClick={onRestart} style={{ width: '100%', background: 'transparent', border: '0.5px solid var(--border2)', borderRadius: 10, padding: 12, color: 'var(--text2)', fontSize: 14, cursor: 'pointer' }}>
+                <button onClick={onRestart} style={{ width: '100%', background: 'rgba(255,255,255,0.03)', backdropFilter:'blur(12px)', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 12, color: 'var(--text2)', fontSize: 14, cursor: 'pointer' }}>
                     Analyze again
                 </button>
             </div>

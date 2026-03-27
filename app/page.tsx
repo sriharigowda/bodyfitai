@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { getUser, sendOTP, verifyOTP, signOut } from '@/lib/auth'
-import { getProfile, saveProfile } from '@/lib/profile'
+import { getProfile, saveProfile, needsOnboarding } from '@/lib/profile'
 import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
 import { calculateBodyAge, calculateIdealMeasurements } from '@/lib/calculations'
 import ResultsPage from '@/components/ResultsPage'
@@ -108,7 +108,12 @@ export default function Home() {
     const u = await getUser()
     setUser(u)
     if (u) {
-      // Load name from profile after login
+      const onboarding = await needsOnboarding()
+      if (onboarding) {
+        // New user - redirect to onboarding to collect name
+        window.location.href = '/onboarding'
+        return
+      }
       const profile = await getProfile()
       if (profile?.name) {
         setForm(f => ({ ...f, name: profile.name }))
@@ -341,6 +346,11 @@ export default function Home() {
                             </button>
                         )
                     }
+                    {form.name && (
+                        <span style={{ fontSize:12, color:'rgba(240,240,240,0.6)', fontWeight:500 }}>
+                    {form.name.split(' ')[0]}
+                  </span>
+                    )}
                     <a href="/progress" style={{ fontSize:11, color:'var(--text3)', textDecoration:'none', padding:'3px 10px', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:20, background:'rgba(255,255,255,0.03)' }}>📊 Progress</a>
                     <button onClick={handleSignOut} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
                   </>
@@ -364,6 +374,12 @@ export default function Home() {
         {screen === 'home' && (
             <div style={{ maxWidth:480, margin:'0 auto', padding:'40px 20px' }}>
               <div className="fade-up" style={{ textAlign:'center', marginBottom:40 }}>
+                {/* Welcome greeting for returning users */}
+                {form.name && (
+                    <div style={{ fontSize:22, fontWeight:500, color:'#f0f0f0', marginBottom:8, letterSpacing:'-0.3px' }}>
+                      Welcome, <span style={{ color:'var(--accent)' }}>{form.name.split(' ')[0]}</span>! 👋
+                    </div>
+                )}
                 <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(232,255,71,0.06)', border:'0.5px solid rgba(232,255,71,0.15)', borderRadius:20, padding:'5px 14px', fontSize:11, color:'var(--accent)', fontWeight:500, marginBottom:20, letterSpacing:'0.04em' }}>
                   AI-POWERED FITNESS ANALYSIS
                 </div>
@@ -434,37 +450,29 @@ export default function Home() {
                           </button>
                       ))}
                     </div>
-                    <div style={{ marginBottom:14 }}>
-                      {user && form.name ? (
-                          // Logged in with saved name — show display card
-                          <div style={{ background:'rgba(232,255,71,0.05)', border:'0.5px solid rgba(232,255,71,0.18)', borderRadius:12, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                            <div>
-                              <div style={{ fontSize:11, color:'var(--accent)', fontWeight:500, letterSpacing:'0.05em', marginBottom:2 }}>WELCOME BACK</div>
-                              <div style={{ fontSize:16, fontWeight:500, color:'var(--text)' }}>{form.name}</div>
-                            </div>
-                            <button onClick={() => setF('name', '')} style={{ fontSize:11, color:'var(--text3)', background:'none', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'4px 10px', cursor:'pointer' }}>
-                              Change
-                            </button>
+                    {/* Name field - only for guests */}
+                    {!user && (
+                        <div style={{ marginBottom:14 }}>
+                          <label style={{ fontSize:12, color:fieldErrors.name?'#e24b4a':'var(--text2)', display:'block', marginBottom:6 }}>Full name *</label>
+                          <input
+                              placeholder="e.g. Srini Kumar"
+                              value={form.name}
+                              onChange={e => setF('name', e.target.value)}
+                              style={{ border:eb('name'), background:ebg('name') }}
+                          />
+                          <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>Login to save your progress after analysis</div>
+                          <FE k="name" />
+                        </div>
+                    )}
+                    {user && form.name && (
+                        <div style={{ background:'rgba(232,255,71,0.05)', border:'0.5px solid rgba(232,255,71,0.15)', borderRadius:12, padding:'12px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
+                          <span style={{ fontSize:20 }}>👋</span>
+                          <div>
+                            <div style={{ fontSize:11, color:'var(--accent)', fontWeight:500, letterSpacing:'0.05em' }}>ANALYZING FOR</div>
+                            <div style={{ fontSize:15, fontWeight:500, color:'var(--text)' }}>{form.name}</div>
                           </div>
-                      ) : (
-                          // Guest or name cleared — show input
-                          <>
-                            <label style={{ fontSize:12, color:fieldErrors.name?'#e24b4a':'var(--text2)', display:'block', marginBottom:6 }}>Full name *</label>
-                            <input
-                                placeholder="e.g. Srini Kumar"
-                                value={form.name}
-                                onChange={e => setF('name', e.target.value)}
-                                style={{ border:eb('name'), background:ebg('name') }}
-                            />
-                            {!user && (
-                                <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>
-                                  Login to save your progress after analysis
-                                </div>
-                            )}
-                          </>
-                      )}
-                      <FE k="name" />
-                    </div>
+                        </div>
+                    )}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
                       <div>
                         <label style={{ fontSize:12, color:fieldErrors.age?'#e24b4a':'var(--text2)', display:'block', marginBottom:6 }}>Age *</label>

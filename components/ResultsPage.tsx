@@ -165,7 +165,7 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
             } else {
               paid.push(feature)
             }
-            sessionStorage.setItem('bodyfitai_paid_features', JSON.stringify([...new Set(paid)]))
+            sessionStorage.setItem('bodyfitai_paid_features', JSON.stringify(Array.from(new Set(paid))))
             onSuccess()
           } else {
             alert('Payment verification failed. Please contact support.')
@@ -250,7 +250,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
   function handlePaySuccess() {
     setPayFeature(null)
     const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
-    setPaidFeatures([...new Set(paid)])
+    setPaidFeatures(Array.from(new Set(paid)) as string[])
     // Navigate immediately after payment
     if (payFeature === 'meal_plan' || payFeature === 'bundle') window.location.href = '/meal-plan'
     else if (payFeature === 'workout_plan') window.location.href = '/workout-plan'

@@ -576,7 +576,7 @@ export default function Home() {
       {/* RESULTS */}
       {screen==='results' && apiData && (
         <ResultsPage
-          results={apiData.results} aiInsights={apiData.aiInsights}
+          results={apiData.results}
           goal={goal} name={form.name} isPro={true} isLoggedIn={!!user}
           onUpgrade={() => {}} onLogin={() => setShowLogin(true)}
           measurements={savedMeasurements}

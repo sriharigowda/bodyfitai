@@ -8,34 +8,20 @@ const SaveProgressModal = dynamic(() => import('@/components/SaveProgressModal')
 import { getUser } from '@/lib/auth'
 import { getSavedAnalyses } from '@/lib/userdata'
 
-interface DayPlan { type: string; breakfast: string; lunch: string; dinner: string; snack: string }
-interface AiInsights {
-  greeting: string; summary: string; motivation: string; warnings: string[]
-  workoutRecommendation: string; nutritionTips: string[]
-  currentAnalysis: { bodyFatExplanation: string; leanMassExplanation: string; ffmiExplanation: string; bodyComposition: string }
-  targetAnalysis:  { bodyFatExplanation: string; leanMassExplanation: string; ffmiExplanation: string; targetBodyMeasurements: string }
-  weeklyDietPlan: Record<string, DayPlan>
-  duration: { weeks: number; months: string; milestone4weeks: string; milestone8weeks: string; milestoneGoal: string }
-}
 interface Props {
-  results: FitnessResults; aiInsights: AiInsights; goal: Goal; name: string; onRestart: () => void
-  isPro?: boolean; onUpgrade?: () => void; measurements?: Measurements; isLoggedIn?: boolean; onLogin?: () => void
+  results: FitnessResults
+  goal: Goal
+  name: string
+  onRestart: () => void
+  measurements?: Measurements
+  isLoggedIn?: boolean
+  onLogin?: () => void
 }
-
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
 const G = {
   glass:  { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, boxShadow:'0 2px 16px rgba(59,130,246,0.06)' },
   glassB: { background:'rgba(59,130,246,0.07)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:14 },
   btn:    { background:'#3b82f6', border:'none', borderRadius:12, padding:'13px 0', color:'white', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 14px rgba(59,130,246,0.28)', transition:'all 0.15s' } as const,
-}
-
-function Card({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
-  return (
-    <div style={{ background: accent ? 'rgba(59,130,246,0.07)' : 'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:`0.5px solid ${accent?'rgba(59,130,246,0.20)':'rgba(255,255,255,0.88)'}`, borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 2px 16px rgba(59,130,246,0.05)' }}>
-      {children}
-    </div>
-  )
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -58,72 +44,27 @@ function MetricRow({ label, current, target, currentColor }: { label: string; cu
   )
 }
 
-function ExplainCard({ title, text, bg }: { title: string; text: string; bg: string; border: string }) {
-  return (
-    <div style={{ background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, overflow:'hidden', marginBottom:10, boxShadow:'0 2px 12px rgba(59,130,246,0.04)' }}>
-      <div style={{ background:bg, padding:'7px 14px' }}>
-        <span style={{ fontSize:11, fontWeight:600, color:'white', letterSpacing:'0.04em' }}>{title}</span>
-      </div>
-      <div style={{ padding:'12px 14px', fontSize:13, color:'#475569', lineHeight:1.65 }}>{text}</div>
-    </div>
-  )
-}
-
 // Payment modal for AI features
 function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onClose: () => void; onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
 
   const features: Record<string, { title: string; icon: string; price: number; includes: string[] }> = {
     meal_plan: {
-      title: 'Detailed Meal Plan',
-      icon: '🍽️',
-      price: 5,
-      includes: [
-        'Time-based meals (6AM → 10PM)',
-        'Pre & post workout meals',
-        'Macros per meal',
-        'Supplement timing guide',
-        'Batch cooking guide',
-        'Gym time adjustment',
-      ]
+      title: 'Detailed Meal Plan', icon: '🍽️', price: 5,
+      includes: ['Time-based meals (6AM → 10PM)', 'Pre & post workout meals', 'Macros per meal', 'Supplement timing guide', 'Batch cooking guide', 'Adjusts to your gym time'],
     },
     workout_plan: {
-      title: 'Workout Plan',
-      icon: '🏋️',
-      price: 5,
-      includes: [
-        '6-day PPL split',
-        'Sets × reps × rest time',
-        'Progressive overload tips',
-        'Exercise substitutions',
-        'Cardio recommendations',
-        'Personalized for your body',
-      ]
+      title: 'Workout Plan', icon: '🏋️', price: 5,
+      includes: ['6-day PPL split', 'Sets × reps × rest time', 'Progressive overload tips', 'Exercise substitutions', 'Cardio recommendations', 'Personalized for your body'],
     },
     ai_insights: {
-      title: 'Full AI Insights',
-      icon: '🤖',
-      price: 5,
-      includes: [
-        'Deep body composition analysis',
-        'Personalized nutrition strategy',
-        'Goal timeline with milestones',
-        'Warning flags & corrections',
-        'Motivation & mindset tips',
-        'Indian supplement guide',
-      ]
+      title: 'Full AI Insights', icon: '🤖', price: 5,
+      includes: ['Deep body composition analysis', 'Personalized nutrition strategy', 'Goal timeline with milestones', 'Warning flags & corrections', 'Motivation & mindset tips', 'Indian supplement guide'],
     },
     bundle: {
-      title: 'All 3 Features Bundle',
-      icon: '🎯',
-      price: 10,
-      includes: [
-        'Everything in Meal Plan',
-        'Everything in Workout Plan',
-        'Everything in AI Insights',
-        'Save ₹5 vs buying separately',
-      ]
-    }
+      title: 'All 3 Features Bundle', icon: '🎯', price: 10,
+      includes: ['Everything in Meal Plan', 'Everything in Workout Plan', 'Everything in AI Insights', 'Save ₹5 vs buying separately'],
+    },
   }
 
   const f = features[feature]
@@ -132,9 +73,8 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
   async function handlePay() {
     setLoading(true)
     try {
-      const res = await fetch('/api/payment/feature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res  = await fetch('/api/payment/feature', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feature, amount: f.price * 100 }),
       })
       const data = await res.json()
@@ -144,27 +84,18 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
       if (!Razorpay) { alert('Payment not available. Please try again.'); setLoading(false); return }
 
       const rzp = new Razorpay({
-        key: data.key,
-        amount: data.amount,
-        currency: 'INR',
-        name: 'BodyFitAI',
-        description: f.title,
-        order_id: data.orderId,
+        key: data.key, amount: data.amount, currency: 'INR',
+        name: 'BodyFitAI', description: f.title, order_id: data.orderId,
         handler: async (response: any) => {
           const verify = await fetch('/api/payment/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...response, feature }),
           })
           const vData = await verify.json()
           if (vData.success) {
-            // Store paid features in sessionStorage
             const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
-            if (feature === 'bundle') {
-              paid.push('meal_plan', 'workout_plan', 'ai_insights')
-            } else {
-              paid.push(feature)
-            }
+            if (feature === 'bundle') paid.push('meal_plan', 'workout_plan', 'ai_insights')
+            else paid.push(feature)
             sessionStorage.setItem('bodyfitai_paid_features', JSON.stringify(Array.from(new Set(paid))))
             onSuccess()
           } else {
@@ -172,12 +103,11 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
           }
           setLoading(false)
         },
-        prefill: {},
-        theme: { color: '#3b82f6' },
-        modal: { ondismiss: () => setLoading(false) }
+        prefill: {}, theme: { color: '#3b82f6' },
+        modal: { ondismiss: () => setLoading(false) },
       })
       rzp.open()
-    } catch (e) {
+    } catch {
       alert('Payment failed. Please try again.')
       setLoading(false)
     }
@@ -192,9 +122,9 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
           <span style={{ fontSize:32, fontWeight:600, color:'#3b82f6' }}>₹{f.price}</span>
           <span style={{ fontSize:13, color:'#94a3b8' }}>one-time · instant access</span>
         </div>
-        <div style={{ textAlign:'left', background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.15)', borderRadius:12, padding:'14px', marginBottom:20 }}>
+        <div style={{ textAlign:'left', background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.15)', borderRadius:12, padding:14, marginBottom:20 }}>
           {f.includes.map((item, i) => (
-            <div key={i} style={{ fontSize:12, color:'#475569', marginBottom: i < f.includes.length-1 ? 6 : 0, display:'flex', alignItems:'center', gap:6 }}>
+            <div key={i} style={{ fontSize:12, color:'#475569', marginBottom:i<f.includes.length-1?6:0, display:'flex', alignItems:'center', gap:6 }}>
               <span style={{ color:'#10b981', fontWeight:600 }}>✓</span> {item}
             </div>
           ))}
@@ -209,21 +139,19 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
   )
 }
 
-export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart, isPro=false, onUpgrade, measurements, isLoggedIn=false, onLogin }: Props) {
-  const [showSaveModal,  setShowSaveModal]  = useState(false)
-  const [saved,          setSaved]          = useState(false)
-  const [hasSaved,       setHasSaved]       = useState(false)
-  const [payFeature,     setPayFeature]     = useState<string|null>(null)
-  const [paidFeatures,   setPaidFeatures]   = useState<string[]>([])
+export default function ResultsPage({ results: r, goal, name, onRestart, measurements, isLoggedIn=false, onLogin }: Props) {
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [saved,         setSaved]         = useState(false)
+  const [hasSaved,      setHasSaved]      = useState(false)
+  const [payFeature,    setPayFeature]    = useState<string|null>(null)
+  const [paidFeatures,  setPaidFeatures]  = useState<string[]>([])
 
   useEffect(() => {
     getUser().then(u => { if (u) getSavedAnalyses().then(d => setHasSaved(d.length > 0)).catch(() => {}) })
-    // Load paid features from session
     const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
     setPaidFeatures(paid)
-    // Store analysis data for meal/workout plan pages
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('bodyfitai_analysis', JSON.stringify({ results: r, aiInsights: ai, measurements }))
+      sessionStorage.setItem('bodyfitai_analysis', JSON.stringify({ results: r, measurements }))
     }
   }, [])
 
@@ -239,7 +167,6 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
   function handleFeatureClick(feature: string) {
     if (!isLoggedIn) { onLogin?.(); return }
     if (paidFeatures.includes(feature)) {
-      // Already paid — navigate to page
       if (feature === 'meal_plan')    window.location.href = '/meal-plan'
       if (feature === 'workout_plan') window.location.href = '/workout-plan'
       return
@@ -248,13 +175,16 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
   }
 
   function handlePaySuccess() {
-    setPayFeature(null)
     const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
     setPaidFeatures(Array.from(new Set(paid)) as string[])
-    // Navigate immediately after payment
+    setPayFeature(null)
     if (payFeature === 'meal_plan' || payFeature === 'bundle') window.location.href = '/meal-plan'
     else if (payFeature === 'workout_plan') window.location.href = '/workout-plan'
   }
+
+  // Body fat color
+  const bfColor = r.bodyFatPercent < 12 ? '#3b82f6' : r.bodyFatPercent < 20 ? '#10b981' : r.bodyFatPercent < 25 ? '#f59e0b' : '#ef4444'
+  const ffmiColor = r.ffmi < 18 ? '#94a3b8' : r.ffmi < 20 ? '#3b82f6' : r.ffmi < 23 ? '#10b981' : '#f59e0b'
 
   return (
     <>
@@ -264,17 +194,18 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
         <div className="fade-up" style={{ ...G.glassB, padding:'18px', marginBottom:20 }}>
           <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:6 }}>YOUR REPORT</div>
           <h2 style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:6 }}>Hi {firstName}! 👋</h2>
-          <p style={{ fontSize:14, color:'#1e293b', lineHeight:1.6, marginBottom:8 }}>{ai.greeting}</p>
-          <p style={{ fontSize:13, color:'#475569', lineHeight:1.6, fontStyle:'italic' }}>"{ai.motivation}"</p>
+          <p style={{ fontSize:14, color:'#64748b', lineHeight:1.6 }}>
+            Your body analysis is ready. Here are your results based on your measurements.
+          </p>
         </div>
 
         {/* Key metrics */}
         <div className="fade-up-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
           {[
             { label:'Daily calories', value:r.dailyCalories.toLocaleString(), unit:'kcal', color:'#3b82f6' },
-            { label:'Body fat',       value:`${r.bodyFatPercent}%`,           unit:'',     color:'#ef4444' },
+            { label:'Body fat',       value:`${r.bodyFatPercent}%`,           unit:'',     color:bfColor },
             { label:'Lean mass',      value:`${r.leanMass}`,                  unit:'kg',   color:'#10b981' },
-            { label:'FFMI',           value:`${r.ffmi}`,                      unit:'',     color:'#f59e0b' },
+            { label:'FFMI',           value:`${r.ffmi}`,                      unit:'',     color:ffmiColor },
           ].map((m, i) => (
             <div key={i} style={{ ...G.glass, padding:'13px 14px' }}>
               <div style={{ fontSize:10, color:'#94a3b8', marginBottom:5, letterSpacing:'0.05em' }}>{m.label.toUpperCase()}</div>
@@ -283,10 +214,23 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
           ))}
         </div>
 
-        {/* AI FEATURES SECTION */}
+        {/* Category badges */}
+        <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' as const }}>
+          <span style={{ fontSize:11, fontWeight:600, padding:'4px 12px', borderRadius:20, background:'rgba(239,68,68,0.10)', color:'#ef4444', border:'0.5px solid rgba(239,68,68,0.20)' }}>
+            Body fat: {r.bodyFatCategory}
+          </span>
+          <span style={{ fontSize:11, fontWeight:600, padding:'4px 12px', borderRadius:20, background:'rgba(59,130,246,0.10)', color:'#3b82f6', border:'0.5px solid rgba(59,130,246,0.20)' }}>
+            FFMI: {r.ffmiCategory}
+          </span>
+          <span style={{ fontSize:11, fontWeight:600, padding:'4px 12px', borderRadius:20, background:'rgba(16,185,129,0.10)', color:'#10b981', border:'0.5px solid rgba(16,185,129,0.20)' }}>
+            Goal: {goal}
+          </span>
+        </div>
+
+        {/* AI FEATURES */}
         <SectionTitle>AI features</SectionTitle>
 
-        {/* Meal Plan Highlight Card */}
+        {/* Meal Plan Highlight */}
         <div onClick={() => handleFeatureClick('meal_plan')}
           style={{ background:'linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(99,179,246,0.06) 100%)', border:'1px solid rgba(59,130,246,0.30)', borderRadius:16, padding:20, marginBottom:12, cursor:'pointer', transition:'all 0.2s', position:'relative', overflow:'hidden' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 8px 28px rgba(59,130,246,0.18)' }}
@@ -318,11 +262,10 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
             <div style={{ fontSize:13, fontWeight:600, color:'#1e293b' }}>More AI features</div>
             <div style={{ fontSize:10, fontWeight:600, background:'rgba(59,130,246,0.10)', color:'#3b82f6', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:10, padding:'2px 8px' }}>PAY PER USE</div>
           </div>
-
           {[
-            { key:'workout_plan', icon:'🏋️', name:'Workout Plan', desc:'6-day split with sets, reps & progressive overload', color:'rgba(16,185,129,0.10)', price:'₹5' },
-            { key:'ai_insights',  icon:'🤖', name:'Full AI Insights', desc:'Deep body composition analysis & strategy', color:'rgba(245,158,11,0.10)', price:'₹5' },
-            { key:'bundle',       icon:'🎯', name:'All 3 bundled', desc:'Meal plan + Workout + AI insights — save ₹5', color:'rgba(59,130,246,0.10)', price:'₹10' },
+            { key:'workout_plan', icon:'🏋️', name:'Workout Plan',     desc:'6-day PPL split with sets, reps & progressive overload', color:'rgba(16,185,129,0.10)', price:'₹5' },
+            { key:'ai_insights',  icon:'🤖', name:'Full AI Insights', desc:'Deep analysis of your body composition & goals',          color:'rgba(245,158,11,0.10)', price:'₹5' },
+            { key:'bundle',       icon:'🎯', name:'All 3 bundled',    desc:'Meal plan + Workout + AI insights — save ₹5',            color:'rgba(59,130,246,0.10)', price:'₹10' },
           ].map(f => (
             <div key={f.key} onClick={() => handleFeatureClick(f.key)}
               style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'0.5px solid rgba(59,130,246,0.07)', cursor:'pointer', transition:'background 0.15s' }}
@@ -344,13 +287,13 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
         </div>
 
         {/* SECTION 1 — CURRENT STATUS */}
-        <SectionTitle>Current body status — {firstName}</SectionTitle>
-        <Card>
-          <div style={{ fontSize:12, fontWeight:500, color:'#64748b', marginBottom:10 }}>Current measurements</div>
+        <SectionTitle>Current body status</SectionTitle>
+        <div style={{ ...G.glass, padding:'14px 16px', marginBottom:10 }}>
+          <div style={{ fontSize:12, fontWeight:500, color:'#64748b', marginBottom:10 }}>Body composition</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
             {[
               ['Body weight', `${r.leanMass + r.fatMass} kg`],
-              ['Body fat',    `${r.bodyFatPercent}%`],
+              ['Body fat %',  `${r.bodyFatPercent}%`],
               ['Lean mass',   `${r.leanMass} kg`],
               ['Fat mass',    `${r.fatMass} kg`],
               ['FFMI',        `${r.ffmi}`],
@@ -362,32 +305,45 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
               </div>
             ))}
           </div>
-        </Card>
-        <ExplainCard title={`Body fat — ${r.bodyFatPercent}% (${r.bodyFatCategory})`}   text={ai.currentAnalysis.bodyFatExplanation}  bg="rgba(239,68,68,0.70)"   border="rgba(239,68,68,0.3)" />
-        <ExplainCard title={`Lean mass — ${r.leanMass} kg (${r.leanMassPercent}%)`}     text={ai.currentAnalysis.leanMassExplanation}  bg="rgba(16,185,129,0.70)"  border="rgba(16,185,129,0.3)" />
-        <ExplainCard title={`FFMI — ${r.ffmi} (${r.ffmiCategory})`}                     text={ai.currentAnalysis.ffmiExplanation}      bg="rgba(59,130,246,0.70)"  border="rgba(59,130,246,0.3)" />
-        <Card>
-          <div style={{ fontSize:12, fontWeight:500, color:'#64748b', marginBottom:8 }}>Body composition overview</div>
-          <p style={{ fontSize:13, color:'#475569', lineHeight:1.6, margin:0 }}>{ai.currentAnalysis.bodyComposition}</p>
-        </Card>
+        </div>
+
+        {/* Category explanations — static, no AI */}
+        {[
+          { title:`Body fat — ${r.bodyFatPercent}% (${r.bodyFatCategory})`, bg:'rgba(239,68,68,0.70)',
+            text: r.bodyFatPercent < 10 ? 'You are in the essential fat range — very lean, athletic physique.' :
+                  r.bodyFatPercent < 15 ? 'You are in the athletic range — lean with visible muscle definition.' :
+                  r.bodyFatPercent < 20 ? 'You are in the fitness range — healthy and active body fat level.' :
+                  r.bodyFatPercent < 25 ? 'You are in the average range — room to reduce fat for better health.' :
+                  'You are above the average range — reducing body fat will improve health and energy.' },
+          { title:`Lean mass — ${r.leanMass} kg (${r.leanMassPercent}%)`, bg:'rgba(16,185,129,0.70)',
+            text: r.ffmi < 18 ? 'Your lean mass is below average for your height. Focus on progressive strength training.' :
+                  r.ffmi < 20 ? 'Your lean mass is average. Consistent training and protein intake will help you build more.' :
+                  r.ffmi < 23 ? 'Your lean mass is above average — you have built a solid muscular foundation.' :
+                  'Your lean mass is excellent — you have a well-developed muscular physique.' },
+          { title:`FFMI — ${r.ffmi} (${r.ffmiCategory})`, bg:'rgba(59,130,246,0.70)',
+            text: r.ffmi < 18 ? 'FFMI below 18 indicates beginner level muscle development. Significant gains possible.' :
+                  r.ffmi < 20 ? 'FFMI 18–20 is average natural muscle development for most people.' :
+                  r.ffmi < 23 ? 'FFMI 20–23 indicates above average muscle development — great progress.' :
+                  'FFMI above 23 is excellent — approaching the upper natural range for muscle development.' },
+        ].map((card, i) => (
+          <div key={i} style={{ background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, overflow:'hidden', marginBottom:10 }}>
+            <div style={{ background:card.bg, padding:'7px 14px' }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'white', letterSpacing:'0.04em' }}>{card.title}</span>
+            </div>
+            <div style={{ padding:'12px 14px', fontSize:13, color:'#475569', lineHeight:1.65 }}>{card.text}</div>
+          </div>
+        ))}
 
         {/* SECTION 2 — TARGET */}
-        <SectionTitle>Target body status — {firstName}</SectionTitle>
-        <Card>
+        <SectionTitle>Target body status</SectionTitle>
+        <div style={{ ...G.glass, padding:'14px 16px', marginBottom:10 }}>
           <div style={{ fontSize:12, fontWeight:500, color:'#64748b', marginBottom:10 }}>Current → Target</div>
           <MetricRow label="Weight"    current={`${r.leanMass + r.fatMass} kg`} target={`${r.target.targetLeanMass + r.target.targetFatMass} kg`} />
           <MetricRow label="Body fat"  current={`${r.bodyFatPercent}%`}          target={`${r.target.targetBodyFat}%`}          currentColor="#ef4444" />
           <MetricRow label="Lean mass" current={`${r.leanMass} kg`}              target={`${r.target.targetLeanMass} kg`}       currentColor="#10b981" />
-          <MetricRow label="FFMI"      current={`${r.ffmi}`}                      target={`${r.target.targetFFMI}`} />
+          <MetricRow label="FFMI"      current={`${r.ffmi}`}                     target={`${r.target.targetFFMI}`} />
           <MetricRow label="Category"  current={r.bodyFatCategory}               target={r.target.targetBodyFatCategory} />
-        </Card>
-        <ExplainCard title={`Target body fat — ${r.target.targetBodyFat}%`}     text={ai.targetAnalysis.bodyFatExplanation}    bg="rgba(239,68,68,0.55)"  border="rgba(239,68,68,0.2)" />
-        <ExplainCard title={`Target lean mass — ${r.target.targetLeanMass} kg`} text={ai.targetAnalysis.leanMassExplanation}   bg="rgba(16,185,129,0.55)" border="rgba(16,185,129,0.2)" />
-        <ExplainCard title={`Target FFMI — ${r.target.targetFFMI}`}             text={ai.targetAnalysis.ffmiExplanation}       bg="rgba(59,130,246,0.55)" border="rgba(59,130,246,0.2)" />
-        <Card>
-          <div style={{ fontSize:12, fontWeight:500, color:'#64748b', marginBottom:8 }}>Target body shape</div>
-          <p style={{ fontSize:13, color:'#475569', lineHeight:1.6, margin:0 }}>{ai.targetAnalysis.targetBodyMeasurements}</p>
-        </Card>
+        </div>
 
         {/* SECTION 3 — NUTRITION */}
         <SectionTitle>Daily nutrition targets</SectionTitle>
@@ -407,46 +363,30 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
           ))}
         </div>
 
-        {/* SECTION 4 — DIET */}
-        <SectionTitle>Diet plan</SectionTitle>
+        {/* Meal plan CTA */}
         <div onClick={() => handleFeatureClick('meal_plan')}
-          style={{ background:'linear-gradient(135deg,rgba(59,130,246,0.08) 0%,rgba(99,179,246,0.04) 100%)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:14, padding:'18px 16px', cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.12)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='linear-gradient(135deg,rgba(59,130,246,0.08) 0%,rgba(99,179,246,0.04) 100%)'}>
+          style={{ background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:12, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.10)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.05)'}>
           <div>
-            <div style={{ fontSize:14, fontWeight:600, color:'#1e293b', marginBottom:4 }}>🍽️ {hasMealPlan ? 'View your detailed meal plan' : 'Get your detailed meal plan'}</div>
-            <div style={{ fontSize:12, color:'#64748b', lineHeight:1.5 }}>Time-based meals · Pre/post workout · Macros per meal · Supplements</div>
-            {!hasMealPlan && <div style={{ fontSize:12, color:'#3b82f6', fontWeight:600, marginTop:6 }}>₹5 — one time</div>}
+            <div style={{ fontSize:13, fontWeight:600, color:'#1e293b', marginBottom:3 }}>🍽️ {hasMealPlan ? 'View your detailed meal plan' : 'Want a detailed meal plan?'}</div>
+            <div style={{ fontSize:11, color:'#64748b' }}>Time-based meals · Pre/post workout · Macros per meal</div>
+            {!hasMealPlan && <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, marginTop:4 }}>₹5 — one time</div>}
           </div>
-          <div style={{ fontSize:22, color:hasMealPlan?'#10b981':'#3b82f6', flexShrink:0 }}>{hasMealPlan ? '✓' : '›'}</div>
+          <div style={{ fontSize:20, color:hasMealPlan?'#10b981':'#3b82f6', flexShrink:0 }}>{hasMealPlan?'✓':'›'}</div>
         </div>
 
-
-        {/* SECTION 5 — WORKOUT */}
-        <SectionTitle>Workout recommendation</SectionTitle>
-        <Card><p style={{ fontSize:13, color:'#475569', lineHeight:1.65, margin:0 }}>{ai.workoutRecommendation}</p></Card>
-
-        {/* CTA to workout plan */}
+        {/* SECTION 4 — WORKOUT CTA */}
         <div onClick={() => handleFeatureClick('workout_plan')}
-          style={{ background:'rgba(16,185,129,0.05)', border:'0.5px solid rgba(16,185,129,0.20)', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
+          style={{ background:'rgba(16,185,129,0.05)', border:'0.5px solid rgba(16,185,129,0.18)', borderRadius:12, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(16,185,129,0.10)'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(16,185,129,0.05)'}>
           <div>
-            <div style={{ fontSize:13, fontWeight:500, color:'#10b981' }}>Want a full 6-day workout split?</div>
-            <div style={{ fontSize:11, color:'#94a3b8' }}>Sets, reps, rest times & progressive overload — ₹5</div>
+            <div style={{ fontSize:13, fontWeight:600, color:'#1e293b', marginBottom:3 }}>🏋️ {hasWorkout ? 'View your workout plan' : 'Want a 6-day workout split?'}</div>
+            <div style={{ fontSize:11, color:'#64748b' }}>Sets, reps, rest times & progressive overload</div>
+            {!hasWorkout && <div style={{ fontSize:11, color:'#10b981', fontWeight:600, marginTop:4 }}>₹5 — one time</div>}
           </div>
-          <div style={{ color:'#10b981', fontSize:18 }}>›</div>
-        </div>
-
-        {/* NUTRITION TIPS */}
-        <SectionTitle>Nutrition tips</SectionTitle>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {ai.nutritionTips.map((tip, i) => (
-            <div key={i} style={{ ...G.glass, padding:'11px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
-              <div style={{ width:6, height:6, borderRadius:'50%', background:'#3b82f6', marginTop:5, flexShrink:0 }}/>
-              <span style={{ fontSize:13, color:'#475569', lineHeight:1.5 }}>{tip}</span>
-            </div>
-          ))}
+          <div style={{ fontSize:20, color:hasWorkout?'#10b981':'#10b981', flexShrink:0 }}>{hasWorkout?'✓':'›'}</div>
         </div>
 
         {/* BODY AGE */}
@@ -458,20 +398,20 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                 <div>
                   <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>YOUR BODY AGE</div>
                   <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
-                    <span style={{ fontSize:40, fontWeight:500, color:(bodyAge?.difference??0)>=0?'#10b981':'#ef4444' }}>{bodyAge?.bodyAge}</span>
+                    <span style={{ fontSize:40, fontWeight:500, color:(bodyAge.difference??0)>=0?'#10b981':'#ef4444' }}>{bodyAge.bodyAge}</span>
                     <span style={{ fontSize:13, color:'#94a3b8' }}>years</span>
                   </div>
                 </div>
                 <div style={{ textAlign:'right' }}>
                   <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>VS ACTUAL AGE</div>
-                  <div style={{ fontSize:18, fontWeight:500, color:(bodyAge?.difference??0)>=0?'#10b981':'#ef4444' }}>
-                    {(bodyAge?.difference??0)>=0?`${bodyAge?.difference} years younger`:`${Math.abs(bodyAge?.difference??0)} years older`}
+                  <div style={{ fontSize:18, fontWeight:500, color:(bodyAge.difference??0)>=0?'#10b981':'#ef4444' }}>
+                    {(bodyAge.difference??0)>=0?`${bodyAge.difference} years younger`:`${Math.abs(bodyAge.difference??0)} years older`}
                   </div>
                 </div>
               </div>
-              <div style={{ background:(bodyAge?.difference??0)>=0?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)', border:`0.5px solid ${(bodyAge?.difference??0)>=0?'rgba(16,185,129,0.25)':'rgba(239,68,68,0.25)'}`, borderRadius:10, padding:'10px 14px' }}>
-                <div style={{ fontSize:12, fontWeight:600, color:(bodyAge?.difference??0)>=0?'#10b981':'#ef4444', marginBottom:4 }}>{bodyAge?.rating}</div>
-                <div style={{ fontSize:12, color:'#475569', lineHeight:1.5 }}>{bodyAge?.message}</div>
+              <div style={{ background:(bodyAge.difference??0)>=0?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)', border:`0.5px solid ${(bodyAge.difference??0)>=0?'rgba(16,185,129,0.25)':'rgba(239,68,68,0.25)'}`, borderRadius:10, padding:'10px 14px' }}>
+                <div style={{ fontSize:12, fontWeight:600, color:(bodyAge.difference??0)>=0?'#10b981':'#ef4444', marginBottom:4 }}>{bodyAge.rating}</div>
+                <div style={{ fontSize:12, color:'#475569', lineHeight:1.5 }}>{bodyAge.message}</div>
               </div>
             </div>
           </>
@@ -511,44 +451,33 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
         )}
 
         {/* TIMELINE */}
-        <SectionTitle>Timeline to reach goal</SectionTitle>
+        <SectionTitle>Estimated timeline</SectionTitle>
         <div style={{ ...G.glassB, padding:'18px 16px', marginBottom:10 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:11, color:'#3b82f6', marginBottom:2, fontWeight:500 }}>ESTIMATED TIME</div>
-              <div style={{ fontSize:30, fontWeight:500, color:'#3b82f6' }}>{ai.duration.months}</div>
-              <div style={{ fontSize:12, color:'#94a3b8' }}>~{ai.duration.weeks} weeks</div>
+              <div style={{ fontSize:30, fontWeight:500, color:'#3b82f6' }}>{Math.round(r.weeksToGoal / 4.3)} months</div>
+              <div style={{ fontSize:12, color:'#94a3b8' }}>~{r.weeksToGoal} weeks</div>
             </div>
             <div style={{ textAlign:'right' }}>
               <div style={{ fontSize:11, color:'#94a3b8', marginBottom:2 }}>GOAL</div>
               <div style={{ fontSize:14, fontWeight:500, color:'#1e293b' }}>{goal}</div>
             </div>
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
             {[
-              { label:'4 weeks', text:ai.duration.milestone4weeks, color:'#3b82f6' },
-              { label:'8 weeks', text:ai.duration.milestone8weeks, color:'#f59e0b' },
-              { label:'At goal', text:ai.duration.milestoneGoal,   color:'#10b981' },
+              { label:'Target weight',   value:`${r.target.targetLeanMass + r.target.targetFatMass} kg`, color:'#3b82f6' },
+              { label:'Target body fat', value:`${r.target.targetBodyFat}%`,                             color:'#ef4444' },
+              { label:'Target lean',     value:`${r.target.targetLeanMass} kg`,                          color:'#10b981' },
+              { label:'Target FFMI',     value:`${r.target.targetFFMI}`,                                 color:'#f59e0b' },
             ].map(m => (
-              <div key={m.label} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                <div style={{ fontSize:10, fontWeight:600, color:m.color, padding:'2px 8px', borderRadius:10, border:`0.5px solid ${m.color}`, whiteSpace:'nowrap' as const, marginTop:1 }}>{m.label}</div>
-                <div style={{ fontSize:12, color:'#475569', lineHeight:1.5 }}>{m.text}</div>
+              <div key={m.label} style={{ background:'rgba(255,255,255,0.40)', borderRadius:10, padding:'10px 12px' }}>
+                <div style={{ fontSize:10, color:'#94a3b8', marginBottom:4 }}>{m.label}</div>
+                <div style={{ fontSize:16, fontWeight:500, color:m.color }}>{m.value}</div>
               </div>
             ))}
           </div>
         </div>
-
-        {/* WARNINGS */}
-        {ai.warnings && ai.warnings.length > 0 && (
-          <>
-            <SectionTitle>Important notes</SectionTitle>
-            <div style={{ background:'rgba(251,191,36,0.08)', border:'0.5px solid rgba(251,191,36,0.30)', borderRadius:12, padding:'14px 16px' }}>
-              {ai.warnings.map((w, i) => (
-                <p key={i} style={{ fontSize:13, color:'#92400e', lineHeight:1.5, marginBottom:i<ai.warnings.length-1?8:0 }}>• {w}</p>
-              ))}
-            </div>
-          </>
-        )}
 
         <p style={{ fontSize:11, color:'#94a3b8', textAlign:'center', lineHeight:1.6, margin:'20px 0 16px' }}>
           Based on US Navy body fat method and Mifflin St Jeor BMR formula. Not a substitute for medical advice.
@@ -574,7 +503,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
         )}
 
         <div style={{ marginBottom:10 }}>
-          <DownloadReport results={r} aiInsights={ai as any} goal={goal} name={name} isLoggedIn={isLoggedIn} onLogin={onLogin}/>
+          <DownloadReport results={r} aiInsights={null} goal={goal} name={name} isLoggedIn={isLoggedIn} onLogin={onLogin}/>
         </div>
 
         <button onClick={onRestart} style={{ width:'100%', background:'rgba(255,255,255,0.60)', backdropFilter:'blur(12px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:12, padding:12, color:'#64748b', fontSize:14, cursor:'pointer' }}>
@@ -583,7 +512,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
       </div>
 
       {showSaveModal && measurements && (
-        <SaveProgressModal onClose={() => setShowSaveModal(false)} measurements={measurements} results={r} aiInsights={ai}
+        <SaveProgressModal onClose={() => setShowSaveModal(false)} measurements={measurements} results={r} aiInsights={null}
           onSaved={() => { setSaved(true); setShowSaveModal(false) }}/>
       )}
 

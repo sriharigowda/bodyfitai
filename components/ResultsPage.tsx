@@ -407,45 +407,20 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
           ))}
         </div>
 
-        {/* SECTION 4 — WEEKLY DIET OVERVIEW */}
-        <SectionTitle>Weekly diet overview</SectionTitle>
-        <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:10 }}>
-          {DAYS.map(day => {
-            const plan = ai.weeklyDietPlan?.[day]
-            if (!plan) return null
-            const isVeg = plan.type?.toLowerCase().includes('veg') && !plan.type?.toLowerCase().includes('non')
-            return (
-              <div key={day} style={{ ...G.glass, overflow:'hidden' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', borderBottom:'0.5px solid rgba(59,130,246,0.08)', background:'rgba(255,255,255,0.40)' }}>
-                  <span style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{day}</span>
-                  <span style={{ fontSize:10, fontWeight:600, padding:'2px 8px', borderRadius:10, background:isVeg?'rgba(16,185,129,0.10)':'rgba(239,68,68,0.10)', color:isVeg?'#10b981':'#ef4444' }}>
-                    {isVeg?'🥗 Veg':'🍗 Non-veg'}
-                  </span>
-                </div>
-                <div style={{ padding:'10px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 12px' }}>
-                  {[{label:'Breakfast',text:plan.breakfast},{label:'Lunch',text:plan.lunch},{label:'Dinner',text:plan.dinner},{label:'Snack',text:plan.snack}].map(m => (
-                    <div key={m.label}>
-                      <div style={{ fontSize:10, color:'#3b82f6', fontWeight:600, letterSpacing:'0.04em', marginBottom:2 }}>{m.label.toUpperCase()}</div>
-                      <div style={{ fontSize:12, color:'#475569', lineHeight:1.4 }}>{m.text}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+        {/* SECTION 4 — DIET */}
+        <SectionTitle>Diet plan</SectionTitle>
+        <div onClick={() => handleFeatureClick('meal_plan')}
+          style={{ background:'linear-gradient(135deg,rgba(59,130,246,0.08) 0%,rgba(99,179,246,0.04) 100%)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:14, padding:'18px 16px', cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.12)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='linear-gradient(135deg,rgba(59,130,246,0.08) 0%,rgba(99,179,246,0.04) 100%)'}>
+          <div>
+            <div style={{ fontSize:14, fontWeight:600, color:'#1e293b', marginBottom:4 }}>🍽️ {hasMealPlan ? 'View your detailed meal plan' : 'Get your detailed meal plan'}</div>
+            <div style={{ fontSize:12, color:'#64748b', lineHeight:1.5 }}>Time-based meals · Pre/post workout · Macros per meal · Supplements</div>
+            {!hasMealPlan && <div style={{ fontSize:12, color:'#3b82f6', fontWeight:600, marginTop:6 }}>₹5 — one time</div>}
+          </div>
+          <div style={{ fontSize:22, color:hasMealPlan?'#10b981':'#3b82f6', flexShrink:0 }}>{hasMealPlan ? '✓' : '›'}</div>
         </div>
 
-        {/* CTA to detailed meal plan */}
-        <div onClick={() => handleFeatureClick('meal_plan')}
-          style={{ background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.10)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.05)'}>
-          <div>
-            <div style={{ fontSize:13, fontWeight:500, color:'#3b82f6' }}>Want time-based meals with macros?</div>
-            <div style={{ fontSize:11, color:'#94a3b8' }}>Get detailed meal plan with gym time — ₹5</div>
-          </div>
-          <div style={{ color:'#3b82f6', fontSize:18 }}>›</div>
-        </div>
 
         {/* SECTION 5 — WORKOUT */}
         <SectionTitle>Workout recommendation</SectionTitle>

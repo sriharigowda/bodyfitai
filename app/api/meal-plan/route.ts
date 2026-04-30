@@ -335,20 +335,22 @@ export async function POST(req: NextRequest) {
     }
 
     // Female fat loss — different supplements
-    const isFemale  = gender === 'Female'
-    const isFatLoss = body.goal === 'Weight loss'
-    const supplements = isFemale ? [
-      { name: 'Iron + Folic Acid',  timing: 'with breakfast', icon: '💊' },
-      { name: 'Vit D3 + K2',       timing: 'with lunch',      icon: '🌅' },
-      { name: 'Omega-3',            timing: 'with dinner',     icon: '🐟' },
-      { name: 'Magnesium 200mg',   timing: 'before bed',       icon: '🌙' },
-      ...(!isFatLoss ? [{ name: 'Creatine 5g', timing: 'post-gym shake', icon: '⚡' }] : []),
-    ] : [
-      { name: 'Creatine 5g',          timing: 'post-gym shake', icon: '⚡' },
-      { name: 'Vit D3 + Ca + Mg + Zn',timing: '1 tablet with lunch', icon: '🌅' },
-      { name: 'Collagen',             timing: 'with morning water',   icon: '🧴' },
-      { name: 'Ashwagandha KSM-66',   timing: 'before bed',           icon: '🌿' },
-    ]
+   const isVegDiet = ['Vegetarian'].includes(dietType)
+   const supplements = isFemale ? [
+     { name: 'Iron + Folic Acid',  timing: 'with breakfast', icon: '💊' },
+     { name: 'Vit D3 + K2',       timing: 'with lunch',      icon: '🌅' },
+     { name: 'Omega-3',            timing: 'with dinner',     icon: '🐟' },
+     { name: 'Magnesium 200mg',    timing: 'before bed',      icon: '🌙' },
+     ...(!isFatLoss ? [{ name: 'Creatine 5g', timing: 'post-gym shake', icon: '⚡' }] : []),
+     ...(isVegDiet   ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast', icon: '🌱' }] : []),
+   ] : [
+     { name: 'Creatine 5g',            timing: 'post-gym shake',     icon: '⚡' },
+     { name: 'Vit D3 + Ca + Mg + Zn',  timing: '1 tablet with lunch', icon: '🌅' },
+     ...(isVegDiet
+       ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast', icon: '🌱' }]
+       : [{ name: 'Collagen',        timing: 'with morning water',   icon: '🧴' }]),
+     { name: 'Ashwagandha KSM-66',     timing: 'before bed',          icon: '🌿' },
+   ]
 
     return NextResponse.json({ nonvegPlan, vegPlan, macros, times, gymTime, supplements })
 

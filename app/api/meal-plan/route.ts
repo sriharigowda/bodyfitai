@@ -6,7 +6,6 @@ const USE_OPENAI   = !!process.env.OPENAI_API_KEY
 const GROQ_MODEL   = process.env.GROQ_MODEL   || 'llama-3.3-70b-versatile'
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
-// ─── Macro distribution per meal ─────────────────────────────────────────────
 const MEAL_DIST = {
   pre_workout:  { protein: 0.20, carbs: 0.22, fat: 0.15 },
   post_workout: { protein: 0.30, carbs: 0.15, fat: 0.18 },
@@ -56,23 +55,20 @@ function buildTimes(gymHour: number) {
   }
 }
 
-// ─── Gender + goal aware food portions ───────────────────────────────────────
 function getFoodPortions(gender: string, goal: string, isVeg: boolean) {
-  const isFemale    = gender === 'Female'
-  const isFatLoss   = goal === 'Weight loss'
-  const isMuscle    = goal === 'Muscle gain'
+  const isFemale  = gender === 'Female'
+  const isFatLoss = goal === 'Weight loss'
+  const isMuscle  = goal === 'Muscle gain'
 
-  // Protein source portions
   const chickenGrams = isFemale ? (isFatLoss ? 150 : 200) : (isFatLoss ? 200 : 250)
   const paneerGrams  = isFemale ? (isFatLoss ? 100 : 150) : (isFatLoss ? 150 : 250)
   const eggsCount    = isFemale ? (isFatLoss ? 2   : 3)   : (isFatLoss ? 3   : 5)
-  const riceGrams    = isFemale ? (isFatLoss ? 100 : 150) : (isFatLoss ? 150 : 200)
+  const riceGrams    = isFemale ? (isFatLoss ? 100 : 170) : (isFatLoss ? 150 : 200)
   const breadSlices  = isFemale ? 2 : 4
   const oatsGrams    = isFemale ? 30 : 50
   const wheyMilk     = isFemale ? 'water' : 'full-fat milk'
-  const walnuts      = isFemale ? '4-5'   : '5-8'
+  const walnuts      = isFemale ? '4-5' : '5-8'
 
-  // Female fat loss — focus on more veg, less starchy carbs
   const lunchCarb = isFemale && isFatLoss
     ? `${riceGrams}g cooked rice or 2 rotis`
     : `${riceGrams}g cooked rice`
@@ -302,7 +298,12 @@ function extractJSON(text: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { dailyCalories, protein, carbs, fat, gymTime, dietType, gender } = body
+    const { protein, carbs, fat, gymTime, dietType, gender } = body
+
+    // Declare at function scope so all code below can use them
+    const isFemale  = gender === 'Female'
+    const isFatLoss = body.goal === 'Weight loss'
+    const isVegDiet = dietType === 'Vegetarian'
 
     const gymHour = gymTimeToHour(gymTime || '9:00 AM')
     const times   = buildTimes(gymHour)
@@ -334,23 +335,22 @@ export async function POST(req: NextRequest) {
       vegPlan = JSON.parse(extractJSON(text))
     }
 
-    // Female fat loss — different supplements
-   const isVegDiet = ['Vegetarian'].includes(dietType)
-   const supplements = isFemale ? [
-     { name: 'Iron + Folic Acid',  timing: 'with breakfast', icon: '💊' },
-     { name: 'Vit D3 + K2',       timing: 'with lunch',      icon: '🌅' },
-     { name: 'Omega-3',            timing: 'with dinner',     icon: '🐟' },
-     { name: 'Magnesium 200mg',    timing: 'before bed',      icon: '🌙' },
-     ...(!isFatLoss ? [{ name: 'Creatine 5g', timing: 'post-gym shake', icon: '⚡' }] : []),
-     ...(isVegDiet   ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast', icon: '🌱' }] : []),
-   ] : [
-     { name: 'Creatine 5g',            timing: 'post-gym shake',     icon: '⚡' },
-     { name: 'Vit D3 + Ca + Mg + Zn',  timing: '1 tablet with lunch', icon: '🌅' },
-     ...(isVegDiet
-       ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast', icon: '🌱' }]
-       : [{ name: 'Collagen',        timing: 'with morning water',   icon: '🧴' }]),
-     { name: 'Ashwagandha KSM-66',     timing: 'before bed',          icon: '🌿' },
-   ]
+    // Gender + goal + diet aware supplements
+    const supplements = isFemale ? [
+      { name: 'Iron + Folic Acid',  timing: 'with breakfast', icon: '💊' },
+      { name: 'Vit D3 + K2',        timing: 'with lunch',     icon: '🌅' },
+      { name: 'Omega-3',             timing: 'with dinner',    icon: '🐟' },
+      { name: 'Magnesium 200mg',     timing: 'before bed',     icon: '🌙' },
+      ...(!isFatLoss ? [{ name: 'Creatine 5g', timing: 'post-gym shake', icon: '⚡' }] : []),
+      ...(isVegDiet  ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast', icon: '🌱' }] : []),
+    ] : [
+      { name: 'Creatine 5g',             timing: 'post-gym shake',      icon: '⚡' },
+      { name: 'Vit D3 + Ca + Mg + Zn',   timing: '1 tablet with lunch', icon: '🌅' },
+      ...(isVegDiet
+        ? [{ name: 'Vit B12 1000mcg', timing: 'with breakfast',  icon: '🌱' }]
+        : [{ name: 'Collagen',        timing: 'with morning water', icon: '🧴' }]),
+      { name: 'Ashwagandha KSM-66', timing: 'before bed', icon: '🌿' },
+    ]
 
     return NextResponse.json({ nonvegPlan, vegPlan, macros, times, gymTime, supplements })
 

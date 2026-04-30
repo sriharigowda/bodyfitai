@@ -98,7 +98,12 @@ export default function Home() {
 
           if (!checkedIn) {
             setCheckinDue(true)
-            if (isMonday()) setTimeout(() => setShowCheckin(true), 3000)
+            // Only show Monday popup if user has done at least one check-in before
+            const { getCheckinHistory } = await import('@/lib/checkin')
+            const history = await getCheckinHistory(1)
+            if (isMonday() && history.length > 0) {
+              setTimeout(() => setShowCheckin(true), 3000)
+            }
           }
         } else {
           // Guest — load name from localStorage only
@@ -155,10 +160,14 @@ export default function Home() {
 
       // Check weekly check-in
       const checkedIn = await hasCheckedInThisWeek().catch(() => false)
-      if (!checkedIn) {
-        setCheckinDue(true)
-        if (isMonday()) setTimeout(() => setShowCheckin(true), 1000)
-      }
+     if (!checkedIn) {
+       setCheckinDue(true)
+       const { getCheckinHistory } = await import('@/lib/checkin')
+       const history = await getCheckinHistory(1)
+       if (isMonday() && history.length > 0) {
+         setTimeout(() => setShowCheckin(true), 1000)
+       }
+     }
     }
 
     setShowLogin(false)

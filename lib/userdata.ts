@@ -15,9 +15,12 @@ export interface SavedAnalysis {
 
 export async function getSavedAnalyses(): Promise<SavedAnalysis[]> {
     try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return []
         const { data, error } = await supabase
             .from('user_analyses')
             .select('*')
+            .eq('user_id', user.id)
             .order('slot', { ascending: true })
         if (error) { console.error('getSavedAnalyses:', error.message); return [] }
         return data ?? []

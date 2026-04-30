@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { jsonrepair } from 'jsonrepair'
 import { Measurements, FitnessResults, calculateResults } from '@/lib/calculations'
-import { canAnalyze, incrementUsage, deductCredit } from '@/lib/usage'
-import { getIdentifier } from '@/lib/identifier'
+
 
 // Auto-detect provider: OpenAI if key present, else Groq
 const USE_OPENAI  = !!process.env.OPENAI_API_KEY
@@ -134,17 +133,7 @@ export async function POST(req: NextRequest) {
     const measurements: Measurements = body.measurements
     const results: FitnessResults    = calculateResults(measurements)
 
-    const ip     = getIdentifier(req)
-    const status = await canAnalyze(ip)
 
-    if (!status.allowed) {
-      return NextResponse.json({
-        error:    'FREE_LIMIT_REACHED',
-        message:  'You have used all your free analyses. Buy credits to continue.',
-        freeLeft: 0,
-        credits:  status.credits,
-      }, { status: 403 })
-    }
 
     // Two parallel AI calls — analysis + diet plan
     const [analysisText, dietText] = await Promise.all([
@@ -155,11 +144,7 @@ export async function POST(req: NextRequest) {
     const analysis      = JSON.parse(extractJSON(analysisText))
     const weeklyDietPlan = JSON.parse(extractJSON(dietText))
 
-    // Deduct credit or increment free usage
-    if (!status.isPro) {
-      if (status.freeLeft > 0) await incrementUsage(ip)
-      else await deductCredit(ip)
-    }
+    /
 
     const aiInsights = { ...analysis, weeklyDietPlan }
     return NextResponse.json({ results, aiInsights })

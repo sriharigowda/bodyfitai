@@ -24,7 +24,6 @@ interface Props {
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
-// Light glass shared styles
 const G = {
   glass:  { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, boxShadow:'0 2px 16px rgba(59,130,246,0.06)' },
   glassB: { background:'rgba(59,130,246,0.07)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:14 },
@@ -53,19 +52,16 @@ function MetricRow({ label, current, target, currentColor }: { label: string; cu
       <span style={{ color:'#64748b' }}>{label}</span>
       <div style={{ display:'flex', gap:14, alignItems:'center' }}>
         <span style={{ fontWeight:500, color:currentColor||'#1e293b' }}>{current}</span>
-        {target && <>
-          <span style={{ color:'#94a3b8', fontSize:10 }}>→</span>
-          <span style={{ fontWeight:500, color:'#3b82f6' }}>{target}</span>
-        </>}
+        {target && <><span style={{ color:'#94a3b8', fontSize:10 }}>→</span><span style={{ fontWeight:500, color:'#3b82f6' }}>{target}</span></>}
       </div>
     </div>
   )
 }
 
-function ExplainCard({ title, text, bg, border }: { title: string; text: string; bg: string; border: string }) {
+function ExplainCard({ title, text, bg }: { title: string; text: string; bg: string; border: string }) {
   return (
     <div style={{ background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, overflow:'hidden', marginBottom:10, boxShadow:'0 2px 12px rgba(59,130,246,0.04)' }}>
-      <div style={{ background:bg, border:`0 0 0.5px 0 ${border}`, padding:'7px 14px' }}>
+      <div style={{ background:bg, padding:'7px 14px' }}>
         <span style={{ fontSize:11, fontWeight:600, color:'white', letterSpacing:'0.04em' }}>{title}</span>
       </div>
       <div style={{ padding:'12px 14px', fontSize:13, color:'#475569', lineHeight:1.65 }}>{text}</div>
@@ -73,28 +69,199 @@ function ExplainCard({ title, text, bg, border }: { title: string; text: string;
   )
 }
 
+// Payment modal for AI features
+function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onClose: () => void; onSuccess: () => void }) {
+  const [loading, setLoading] = useState(false)
+
+  const features: Record<string, { title: string; icon: string; price: number; includes: string[] }> = {
+    meal_plan: {
+      title: 'Detailed Meal Plan',
+      icon: '🍽️',
+      price: 5,
+      includes: [
+        'Time-based meals (6AM → 10PM)',
+        'Pre & post workout meals',
+        'Macros per meal',
+        'Supplement timing guide',
+        'Batch cooking guide',
+        'Gym time adjustment',
+      ]
+    },
+    workout_plan: {
+      title: 'Workout Plan',
+      icon: '🏋️',
+      price: 5,
+      includes: [
+        '6-day PPL split',
+        'Sets × reps × rest time',
+        'Progressive overload tips',
+        'Exercise substitutions',
+        'Cardio recommendations',
+        'Personalized for your body',
+      ]
+    },
+    ai_insights: {
+      title: 'Full AI Insights',
+      icon: '🤖',
+      price: 5,
+      includes: [
+        'Deep body composition analysis',
+        'Personalized nutrition strategy',
+        'Goal timeline with milestones',
+        'Warning flags & corrections',
+        'Motivation & mindset tips',
+        'Indian supplement guide',
+      ]
+    },
+    bundle: {
+      title: 'All 3 Features Bundle',
+      icon: '🎯',
+      price: 10,
+      includes: [
+        'Everything in Meal Plan',
+        'Everything in Workout Plan',
+        'Everything in AI Insights',
+        'Save ₹5 vs buying separately',
+      ]
+    }
+  }
+
+  const f = features[feature]
+  if (!f) return null
+
+  async function handlePay() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/payment/feature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature, amount: f.price * 100 }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(data.error); setLoading(false); return }
+
+      const Razorpay = (window as any).Razorpay
+      if (!Razorpay) { alert('Payment not available. Please try again.'); setLoading(false); return }
+
+      const rzp = new Razorpay({
+        key: data.key,
+        amount: data.amount,
+        currency: 'INR',
+        name: 'BodyFitAI',
+        description: f.title,
+        order_id: data.orderId,
+        handler: async (response: any) => {
+          const verify = await fetch('/api/payment/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...response, feature }),
+          })
+          const vData = await verify.json()
+          if (vData.success) {
+            // Store paid features in sessionStorage
+            const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+            if (feature === 'bundle') {
+              paid.push('meal_plan', 'workout_plan', 'ai_insights')
+            } else {
+              paid.push(feature)
+            }
+            sessionStorage.setItem('bodyfitai_paid_features', JSON.stringify([...new Set(paid)]))
+            onSuccess()
+          } else {
+            alert('Payment verification failed. Please contact support.')
+          }
+          setLoading(false)
+        },
+        prefill: {},
+        theme: { color: '#3b82f6' },
+        modal: { ondismiss: () => setLoading(false) }
+      })
+      rzp.open()
+    } catch (e) {
+      alert('Payment failed. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
+      <div style={{ background:'rgba(255,255,255,0.95)', backdropFilter:'blur(24px)', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, padding:'28px 24px', maxWidth:380, width:'100%', textAlign:'center', boxShadow:'0 20px 60px rgba(59,130,246,0.15)' }}>
+        <div style={{ fontSize:48, marginBottom:12 }}>{f.icon}</div>
+        <div style={{ fontSize:20, fontWeight:600, color:'#1e293b', marginBottom:6 }}>{f.title}</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:20 }}>
+          <span style={{ fontSize:32, fontWeight:600, color:'#3b82f6' }}>₹{f.price}</span>
+          <span style={{ fontSize:13, color:'#94a3b8' }}>one-time · instant access</span>
+        </div>
+        <div style={{ textAlign:'left', background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.15)', borderRadius:12, padding:'14px', marginBottom:20 }}>
+          {f.includes.map((item, i) => (
+            <div key={i} style={{ fontSize:12, color:'#475569', marginBottom: i < f.includes.length-1 ? 6 : 0, display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ color:'#10b981', fontWeight:600 }}>✓</span> {item}
+            </div>
+          ))}
+        </div>
+        <button onClick={handlePay} disabled={loading} style={{ ...G.btn, width:'100%', marginBottom:10, fontSize:15, opacity:loading?0.7:1 }}>
+          {loading ? 'Processing...' : `Pay ₹${f.price} with Razorpay →`}
+        </button>
+        <button onClick={onClose} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:13, cursor:'pointer' }}>Cancel</button>
+      </div>
+      <script src="https://checkout.razorpay.com/v1/checkout.js" async/>
+    </div>
+  )
+}
+
 export default function ResultsPage({ results: r, aiInsights: ai, goal, name, onRestart, isPro=false, onUpgrade, measurements, isLoggedIn=false, onLogin }: Props) {
-  const [showSaveModal, setShowSaveModal] = useState(false)
-  const [saved,         setSaved]         = useState(false)
-  const [hasSaved,      setHasSaved]      = useState(false)
+  const [showSaveModal,  setShowSaveModal]  = useState(false)
+  const [saved,          setSaved]          = useState(false)
+  const [hasSaved,       setHasSaved]       = useState(false)
+  const [payFeature,     setPayFeature]     = useState<string|null>(null)
+  const [paidFeatures,   setPaidFeatures]   = useState<string[]>([])
 
   useEffect(() => {
     getUser().then(u => { if (u) getSavedAnalyses().then(d => setHasSaved(d.length > 0)).catch(() => {}) })
+    // Load paid features from session
+    const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+    setPaidFeatures(paid)
+    // Store analysis data for meal/workout plan pages
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('bodyfitai_analysis', JSON.stringify({ results: r, aiInsights: ai, measurements }))
+    }
   }, [])
 
-  const firstName = name.split(' ')[0]
-  const mGender   = (measurements?.gender as any) ?? 'Male'
-  const mHeight   = measurements?.height ?? 170
-  const mAge      = measurements?.age    ?? 25
-  const bodyAge   = calculateBodyAge(mAge, r.bodyFatPercent, r.ffmi, mGender)
-  const ideal     = calculateIdealMeasurements(mHeight, mGender)
+  const firstName   = name.split(' ')[0]
+  const mGender     = (measurements?.gender as any) ?? 'Male'
+  const mHeight     = measurements?.height ?? 170
+  const mAge        = measurements?.age    ?? 25
+  const bodyAge     = calculateBodyAge(mAge, r.bodyFatPercent, r.ffmi, mGender)
+  const ideal       = calculateIdealMeasurements(mHeight, mGender)
+  const hasMealPlan = paidFeatures.includes('meal_plan')
+  const hasWorkout  = paidFeatures.includes('workout_plan')
+
+  function handleFeatureClick(feature: string) {
+    if (!isLoggedIn) { onLogin?.(); return }
+    if (paidFeatures.includes(feature)) {
+      // Already paid — navigate to page
+      if (feature === 'meal_plan')    window.location.href = '/meal-plan'
+      if (feature === 'workout_plan') window.location.href = '/workout-plan'
+      return
+    }
+    setPayFeature(feature)
+  }
+
+  function handlePaySuccess() {
+    setPayFeature(null)
+    const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+    setPaidFeatures([...new Set(paid)])
+    // Navigate immediately after payment
+    if (payFeature === 'meal_plan' || payFeature === 'bundle') window.location.href = '/meal-plan'
+    else if (payFeature === 'workout_plan') window.location.href = '/workout-plan'
+  }
 
   return (
     <>
       <div style={{ maxWidth:480, margin:'0 auto', padding:'24px 20px 48px' }}>
 
         {/* Greeting */}
-        <div className="fade-up" style={{ ...G.glassB, padding:'18px 18px', marginBottom:20 }}>
+        <div className="fade-up" style={{ ...G.glassB, padding:'18px', marginBottom:20 }}>
           <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:6 }}>YOUR REPORT</div>
           <h2 style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:6 }}>Hi {firstName}! 👋</h2>
           <p style={{ fontSize:14, color:'#1e293b', lineHeight:1.6, marginBottom:8 }}>{ai.greeting}</p>
@@ -109,9 +276,69 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
             { label:'Lean mass',      value:`${r.leanMass}`,                  unit:'kg',   color:'#10b981' },
             { label:'FFMI',           value:`${r.ffmi}`,                      unit:'',     color:'#f59e0b' },
           ].map((m, i) => (
-            <div key={i} className="count-up" style={{ ...G.glass, padding:'13px 14px', animationDelay:`${i*0.08}s` }}>
+            <div key={i} style={{ ...G.glass, padding:'13px 14px' }}>
               <div style={{ fontSize:10, color:'#94a3b8', marginBottom:5, letterSpacing:'0.05em' }}>{m.label.toUpperCase()}</div>
               <div style={{ fontSize:22, fontWeight:500, color:m.color }}>{m.value}<span style={{ fontSize:11, color:'#94a3b8', marginLeft:2 }}>{m.unit}</span></div>
+            </div>
+          ))}
+        </div>
+
+        {/* AI FEATURES SECTION */}
+        <SectionTitle>AI features</SectionTitle>
+
+        {/* Meal Plan Highlight Card */}
+        <div onClick={() => handleFeatureClick('meal_plan')}
+          style={{ background:'linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(99,179,246,0.06) 100%)', border:'1px solid rgba(59,130,246,0.30)', borderRadius:16, padding:20, marginBottom:12, cursor:'pointer', transition:'all 0.2s', position:'relative', overflow:'hidden' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 8px 28px rgba(59,130,246,0.18)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform=''; (e.currentTarget as HTMLElement).style.boxShadow='' }}>
+          <div style={{ position:'absolute', top:-40, right:-40, width:120, height:120, background:'radial-gradient(circle,rgba(59,130,246,0.15) 0%,transparent 70%)', borderRadius:'50%' }}/>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div style={{ fontSize:32 }}>🍽️</div>
+            <div style={{ fontSize:11, fontWeight:600, background:hasMealPlan?'#10b981':'#3b82f6', color:'white', borderRadius:10, padding:'3px 10px' }}>
+              {hasMealPlan ? '✓ Unlocked' : '₹5'}
+            </div>
+          </div>
+          <div style={{ fontSize:17, fontWeight:600, color:'#1e293b', marginBottom:4 }}>Detailed Meal Plan</div>
+          <div style={{ fontSize:12, color:'#475569', lineHeight:1.5, marginBottom:14 }}>
+            Time-based daily plan with exact meal times, pre/post workout meals, macros per meal, supplement timing and batch cooking guide.
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap' as const, gap:6, marginBottom:16 }}>
+            {['⏰ Time-based','💪 Pre/Post workout','📊 Macros/meal','💊 Supplements','🍳 Batch cooking'].map(f => (
+              <span key={f} style={{ fontSize:11, background:'rgba(255,255,255,0.60)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:20, padding:'3px 10px', color:'#64748b' }}>{f}</span>
+            ))}
+          </div>
+          <button style={{ ...G.btn, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            {hasMealPlan ? 'View my meal plan →' : 'Get detailed meal plan — ₹5 →'}
+          </button>
+        </div>
+
+        {/* Other AI features */}
+        <div style={{ ...G.glass, overflow:'hidden', marginBottom:20 }}>
+          <div style={{ padding:'12px 16px', borderBottom:'0.5px solid rgba(59,130,246,0.08)', display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(59,130,246,0.03)' }}>
+            <div style={{ fontSize:13, fontWeight:600, color:'#1e293b' }}>More AI features</div>
+            <div style={{ fontSize:10, fontWeight:600, background:'rgba(59,130,246,0.10)', color:'#3b82f6', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:10, padding:'2px 8px' }}>PAY PER USE</div>
+          </div>
+
+          {[
+            { key:'workout_plan', icon:'🏋️', name:'Workout Plan', desc:'6-day split with sets, reps & progressive overload', color:'rgba(16,185,129,0.10)', price:'₹5' },
+            { key:'ai_insights',  icon:'🤖', name:'Full AI Insights', desc:'Deep body composition analysis & strategy', color:'rgba(245,158,11,0.10)', price:'₹5' },
+            { key:'bundle',       icon:'🎯', name:'All 3 bundled', desc:'Meal plan + Workout + AI insights — save ₹5', color:'rgba(59,130,246,0.10)', price:'₹10' },
+          ].map(f => (
+            <div key={f.key} onClick={() => handleFeatureClick(f.key)}
+              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:'0.5px solid rgba(59,130,246,0.07)', cursor:'pointer', transition:'background 0.15s' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.03)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background=''}>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:f.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{f.icon}</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:500, color:'#1e293b', marginBottom:2 }}>{f.name}</div>
+                  <div style={{ fontSize:11, color:'#94a3b8' }}>{f.desc}</div>
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ fontSize:12, fontWeight:600, color:'#3b82f6', background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:8, padding:'3px 10px' }}>{f.price}</div>
+                <div style={{ color:'#cbd5e1', fontSize:14 }}>›</div>
+              </div>
             </div>
           ))}
         </div>
@@ -180,51 +407,63 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
           ))}
         </div>
 
-        {/* SECTION 4 — DIET PLAN */}
-        <SectionTitle>Weekly diet plan</SectionTitle>
-        {!isPro ? (
-          <div style={{ ...G.glass, padding:'32px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:12, textAlign:'center', marginBottom:10 }}>
-            <div style={{ width:48, height:48, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>🔒</div>
-            <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>Unlock weekly diet plan</div>
-            <div style={{ fontSize:13, color:'#64748b', maxWidth:260, lineHeight:1.6 }}>Buy credits to unlock diet plan, PDF report and more</div>
-            {!isLoggedIn ? (
-              <button onClick={() => onLogin?.()} style={{ ...G.btn, padding:'11px 28px', width:'auto', marginTop:4 }}>Login to unlock →</button>
-            ) : (
-              <button onClick={onUpgrade} style={{ ...G.btn, padding:'11px 28px', width:'auto', marginTop:4 }}>Buy credits — from ₹29</button>
-            )}
-          </div>
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {DAYS.map(day => {
-              const plan = ai.weeklyDietPlan?.[day]
-              if (!plan) return null
-              const isVeg = plan.type?.toLowerCase().includes('veg') && !plan.type?.toLowerCase().includes('non')
-              return (
-                <div key={day} style={{ ...G.glass, overflow:'hidden' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', borderBottom:'0.5px solid rgba(59,130,246,0.08)', background:'rgba(255,255,255,0.40)' }}>
-                    <span style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{day}</span>
-                    <span style={{ fontSize:10, fontWeight:600, padding:'2px 8px', borderRadius:10, background:isVeg?'rgba(16,185,129,0.10)':'rgba(239,68,68,0.10)', color:isVeg?'#10b981':'#ef4444' }}>
-                      {isVeg?'🥗 Veg':'🍗 Non-veg'}
-                    </span>
-                  </div>
-                  <div style={{ padding:'10px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 12px' }}>
-                    {[{label:'Breakfast',text:plan.breakfast},{label:'Lunch',text:plan.lunch},{label:'Dinner',text:plan.dinner},{label:'Snack',text:plan.snack}].map(m => (
-                      <div key={m.label}>
-                        <div style={{ fontSize:10, color:'#3b82f6', fontWeight:600, letterSpacing:'0.04em', marginBottom:2 }}>{m.label.toUpperCase()}</div>
-                        <div style={{ fontSize:12, color:'#475569', lineHeight:1.4 }}>{m.text}</div>
-                      </div>
-                    ))}
-                  </div>
+        {/* SECTION 4 — WEEKLY DIET OVERVIEW */}
+        <SectionTitle>Weekly diet overview</SectionTitle>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:10 }}>
+          {DAYS.map(day => {
+            const plan = ai.weeklyDietPlan?.[day]
+            if (!plan) return null
+            const isVeg = plan.type?.toLowerCase().includes('veg') && !plan.type?.toLowerCase().includes('non')
+            return (
+              <div key={day} style={{ ...G.glass, overflow:'hidden' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 14px', borderBottom:'0.5px solid rgba(59,130,246,0.08)', background:'rgba(255,255,255,0.40)' }}>
+                  <span style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{day}</span>
+                  <span style={{ fontSize:10, fontWeight:600, padding:'2px 8px', borderRadius:10, background:isVeg?'rgba(16,185,129,0.10)':'rgba(239,68,68,0.10)', color:isVeg?'#10b981':'#ef4444' }}>
+                    {isVeg?'🥗 Veg':'🍗 Non-veg'}
+                  </span>
                 </div>
-              )
-            })}
-          </div>
-        )}
+                <div style={{ padding:'10px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 12px' }}>
+                  {[{label:'Breakfast',text:plan.breakfast},{label:'Lunch',text:plan.lunch},{label:'Dinner',text:plan.dinner},{label:'Snack',text:plan.snack}].map(m => (
+                    <div key={m.label}>
+                      <div style={{ fontSize:10, color:'#3b82f6', fontWeight:600, letterSpacing:'0.04em', marginBottom:2 }}>{m.label.toUpperCase()}</div>
+                      <div style={{ fontSize:12, color:'#475569', lineHeight:1.4 }}>{m.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
 
-        {/* SECTION 5 — WORKOUT + TIPS */}
+        {/* CTA to detailed meal plan */}
+        <div onClick={() => handleFeatureClick('meal_plan')}
+          style={{ background:'rgba(59,130,246,0.05)', border:'0.5px solid rgba(59,130,246,0.20)', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.10)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(59,130,246,0.05)'}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:'#3b82f6' }}>Want time-based meals with macros?</div>
+            <div style={{ fontSize:11, color:'#94a3b8' }}>Get detailed meal plan with gym time — ₹5</div>
+          </div>
+          <div style={{ color:'#3b82f6', fontSize:18 }}>›</div>
+        </div>
+
+        {/* SECTION 5 — WORKOUT */}
         <SectionTitle>Workout recommendation</SectionTitle>
         <Card><p style={{ fontSize:13, color:'#475569', lineHeight:1.65, margin:0 }}>{ai.workoutRecommendation}</p></Card>
 
+        {/* CTA to workout plan */}
+        <div onClick={() => handleFeatureClick('workout_plan')}
+          style={{ background:'rgba(16,185,129,0.05)', border:'0.5px solid rgba(16,185,129,0.20)', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom:20 }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background='rgba(16,185,129,0.10)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background='rgba(16,185,129,0.05)'}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:'#10b981' }}>Want a full 6-day workout split?</div>
+            <div style={{ fontSize:11, color:'#94a3b8' }}>Sets, reps, rest times & progressive overload — ₹5</div>
+          </div>
+          <div style={{ color:'#10b981', fontSize:18 }}>›</div>
+        </div>
+
+        {/* NUTRITION TIPS */}
         <SectionTitle>Nutrition tips</SectionTitle>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {ai.nutritionTips.map((tip, i) => (
@@ -290,7 +529,7 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
                 </div>
               ))}
               <div style={{ padding:'10px 16px', background:'rgba(59,130,246,0.04)', borderTop:'0.5px solid rgba(59,130,246,0.08)' }}>
-                <p style={{ fontSize:11, color:'#94a3b8', lineHeight:1.5, margin:0 }}>Based on your height ({mHeight}cm) using Steve Reeves golden ratio formula. Aesthetic ideals — your personal goals may differ.</p>
+                <p style={{ fontSize:11, color:'#94a3b8', lineHeight:1.5, margin:0 }}>Based on your height ({mHeight}cm) using Steve Reeves golden ratio formula.</p>
               </div>
             </div>
           </>
@@ -359,7 +598,6 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
           </div>
         )}
 
-        {/* DOWNLOAD PDF */}
         <div style={{ marginBottom:10 }}>
           <DownloadReport results={r} aiInsights={ai as any} goal={goal} name={name} isLoggedIn={isLoggedIn} onLogin={onLogin}/>
         </div>
@@ -372,6 +610,10 @@ export default function ResultsPage({ results: r, aiInsights: ai, goal, name, on
       {showSaveModal && measurements && (
         <SaveProgressModal onClose={() => setShowSaveModal(false)} measurements={measurements} results={r} aiInsights={ai}
           onSaved={() => { setSaved(true); setShowSaveModal(false) }}/>
+      )}
+
+      {payFeature && (
+        <FeaturePayModal feature={payFeature} onClose={() => setPayFeature(null)} onSuccess={handlePaySuccess}/>
       )}
     </>
   )

@@ -4,8 +4,7 @@ import { getUser, sendOTP, verifyOTP, signOut } from '@/lib/auth'
 import { getProfile, saveProfile } from '@/lib/profile'
 import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
 import ResultsPage from '@/components/ResultsPage'
-import UpgradeModal from '@/components/UpgradeModal'
-import { hasCheckedInThisWeek, isMonday } from '@/lib/checkin'
+import { hasCheckedInThisWeek, isMonday, getCheckinHistory } from '@/lib/checkin'
 
 type Unit   = 'metric' | 'imperial'
 type Screen = 'home' | 'form' | 'analyzing' | 'results'
@@ -52,12 +51,6 @@ export default function Home() {
   const [savedMeasurements, setSavedMeasurements] = useState<any>(null)
   const [error,        setError]        = useState('')
   const [fieldErrors,  setFieldErrors]  = useState<Record<string,string>>({})
-  const [freeLeft,     setFreeLeft]     = useState<number | undefined>(undefined)
-  const [credits,      setCredits]      = useState(0)
-  const [isPro,        setIsPro]        = useState(false)
-  const [showUpgrade,  setShowUpgrade]  = useState(false)
-  const blockedRef = useRef(false)
-  const [userIp,       setUserIp]       = useState('anonymous')
   const [user,         setUser]         = useState<any>(null)
   const [authLoading,  setAuthLoading]  = useState(true)
   const [showLogin,    setShowLogin]    = useState(false)
@@ -77,11 +70,9 @@ export default function Home() {
       try {
         const u = await getUser()
         if (cancelled) return
-
         setUser(u)
 
         if (u) {
-          // Load profile + checkin status in parallel
           const [profile, checkedIn] = await Promise.all([
             getProfile(),
             hasCheckedInThisWeek().catch(() => false),
@@ -91,22 +82,21 @@ export default function Home() {
           if (profile?.name) {
             setForm(f => ({ ...f, name: profile.name }))
           } else {
-            // No profile name yet — check localStorage fallback
             const saved = localStorage.getItem('bodyfitai_user_name')
             if (saved) setForm(f => ({ ...f, name: saved }))
           }
 
           if (!checkedIn) {
             setCheckinDue(true)
-            // Only show Monday popup if user has done at least one check-in before
-            const { getCheckinHistory } = await import('@/lib/checkin')
-            const history = await getCheckinHistory(1)
-            if (isMonday() && history.length > 0) {
-              setTimeout(() => setShowCheckin(true), 3000)
+            // Only show Monday popup if user has at least 1 previous check-in
+            if (isMonday()) {
+              const history = await getCheckinHistory(1).catch(() => [])
+              if (history.length > 0) {
+                setTimeout(() => setShowCheckin(true), 3000)
+              }
             }
           }
         } else {
-          // Guest — load name from localStorage only
           const saved = localStorage.getItem('bodyfitai_user_name')
           if (saved) setForm(f => ({ ...f, name: saved }))
         }
@@ -119,7 +109,6 @@ export default function Home() {
 
     init()
 
-    // Handle ?login=1 redirect param
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('login') === '1') {
@@ -152,54 +141,32 @@ export default function Home() {
     if (u) {
       const profile = await getProfile()
       if (!profile?.name) {
-        // New user — redirect to onboarding ONCE
         window.location.replace('/onboarding')
         return
       }
       setForm(f => ({ ...f, name: profile.name }))
 
-      // Check weekly check-in
       const checkedIn = await hasCheckedInThisWeek().catch(() => false)
-     if (!checkedIn) {
-       setCheckinDue(true)
-       const { getCheckinHistory } = await import('@/lib/checkin')
-       const history = await getCheckinHistory(1)
-       if (isMonday() && history.length > 0) {
-         setTimeout(() => setShowCheckin(true), 1000)
-       }
-     }
+      if (!checkedIn) {
+        setCheckinDue(true)
+        // Only show popup if user has previous check-in history
+        if (isMonday()) {
+          const history = await getCheckinHistory(1).catch(() => [])
+          if (history.length > 0) {
+            setTimeout(() => setShowCheckin(true), 1000)
+          }
+        }
+      }
     }
 
-    setShowLogin(false)
-    setLoginStep('email')
-    setLoginEmail('')
-    setLoginOtp('')
-    setLoginLoading(false)
+    setShowLogin(false); setLoginStep('email'); setLoginEmail(''); setLoginOtp(''); setLoginLoading(false)
   }
 
   async function handleSignOut() {
     await signOut()
-    setUser(null)
-    setCheckinDue(false)
-    setShowCheckin(false)
+    setUser(null); setCheckinDue(false); setShowCheckin(false)
     setForm(f => ({ ...f, name: localStorage.getItem('bodyfitai_user_name') || '' }))
   }
-
-  // ── Usage / credits ─────────────────────────────────────────────────────────
-  async function refreshUsage() {
-    try {
-      const headers: Record<string,string> = {}
-      const u = await getUser()
-      if (u?.id) headers['x-user-id'] = u.id
-      const d = await fetch('/api/usage', { headers }).then(r => r.json())
-      setFreeLeft(d.freeLeft ?? 0)
-      setCredits(d.credits ?? 0)
-      setIsPro(d.isPro ?? false)
-      if (d.identifier) setUserIp(d.identifier)
-    } catch {}
-  }
-
-  useEffect(() => { void refreshUsage() }, [])
 
   // ── Form helpers ─────────────────────────────────────────────────────────────
   const ul  = (lbl: string) => `${lbl} (${unit==='metric'?'cm':'in'})`
@@ -241,7 +208,6 @@ export default function Home() {
 
   const tryAnalyze = () => {
     if (!validate(4)) return
-    if (!user && freeLeft!==undefined && freeLeft<=0) { setShowLogin(true); return }
     void runAnalysis()
   }
 
@@ -282,14 +248,8 @@ export default function Home() {
       const cu = await getUser(); if (cu?.id) headers['x-user-id'] = cu.id
       const data = await fetch('/api/analyze', { method:'POST', headers, body:JSON.stringify({ measurements }) }).then(r=>r.json())
       clearInterval(iv)
-      if (data.error==='FREE_LIMIT_REACHED') {
-        setScreen('form')
-        if (!user) setShowLogin(true)
-        else { blockedRef.current=true; setShowUpgrade(true) }
-        return
-      }
       if (data.error) { setError(data.error); setScreen('form'); return }
-      setApiData(data); setScreen('results'); await refreshUsage()
+      setApiData(data); setScreen('results')
     } catch {
       clearInterval(iv); setError('Something went wrong. Please try again.'); setScreen('form')
     }
@@ -303,7 +263,6 @@ export default function Home() {
   const hasErr = Object.keys(fieldErrors).length>0
   const lbl = (k: string) => ({ fontSize:12, color:fieldErrors[k]?'#ef4444':'#64748b', display:'block' as const, marginBottom:6, fontWeight:500 as const })
 
-  // ── Auth loading screen ───────────────────────────────────────────────────────
   if (authLoading) return (
     <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)', display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
@@ -325,15 +284,8 @@ export default function Home() {
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {screen==='form' && <span style={{ fontSize:12, color:'#94a3b8' }}>Step {step} of 4</span>}
           {screen==='results' && <button onClick={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null) }} style={{ fontSize:12, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Start over</button>}
-          {freeLeft!==undefined && <span style={{ fontSize:11, color:'#94a3b8' }}>{freeLeft>0?`${freeLeft} free left`:credits>0?`${credits} credits`:'0 left'}</span>}
           {user ? (
             <>
-              {isPro
-                ? <span style={{ fontSize:11, background:'rgba(16,185,129,0.10)', color:'#10b981', padding:'3px 10px', borderRadius:20, fontWeight:500, border:'0.5px solid rgba(16,185,129,0.25)' }}>Pro</span>
-                : <button onClick={() => { blockedRef.current=false; setShowUpgrade(true) }} style={{ fontSize:11, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', color:'#3b82f6', padding:'4px 12px', borderRadius:20, cursor:'pointer', fontWeight:500 }}>
-                    {credits===0&&freeLeft===0?'Buy credits':'+ Add more'}
-                  </button>
-              }
               {form.name && <span style={{ fontSize:12, color:'#475569', fontWeight:500 }}>{form.name.split(' ')[0]}</span>}
               <a href="/progress" style={{ fontSize:11, color:'#64748b', textDecoration:'none', padding:'4px 10px', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, background:'rgba(255,255,255,0.60)' }}>📊 Progress</a>
               <button onClick={handleSignOut} style={{ fontSize:11, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
@@ -381,16 +333,9 @@ export default function Home() {
               Enter your body measurements and get a personalized calorie target, macro split, FFMI score, and full diet plan.
             </p>
             <button onClick={() => setScreen('form')} style={{ ...G.btn, width:'100%', maxWidth:300, display:'block', margin:'0 auto 10px', fontSize:15, padding:'14px 0' }}>
-              Get my free plan →
+              {user ? 'Start new analysis →' : 'Get my free analysis →'}
             </button>
-            <p style={{ fontSize:12, color:'#94a3b8', marginTop:6 }}>
-              {!user?'1 free analysis · No account needed'
-                :isPro?'Unlimited analyses'
-                :freeLeft===undefined?''
-                :freeLeft>0?`${freeLeft} free ${freeLeft===1?'analysis':'analyses'} remaining`
-                :credits>0?`${credits} credits remaining`
-                :'No analyses left'}
-            </p>
+            {!user && <p style={{ fontSize:12, color:'#94a3b8', marginTop:6 }}>No account needed · Completely free</p>}
             {user && checkinDue && (
               <a href="/checkin" style={{ display:'inline-block', marginTop:12, fontSize:12, color:'#3b82f6', textDecoration:'none', background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:20, padding:'5px 14px' }}>
                 📊 Weekly check-in due →
@@ -632,8 +577,8 @@ export default function Home() {
       {screen==='results' && apiData && (
         <ResultsPage
           results={apiData.results} aiInsights={apiData.aiInsights}
-          goal={goal} name={form.name} isPro={isPro} isLoggedIn={!!user}
-          onUpgrade={() => setShowUpgrade(true)} onLogin={() => setShowLogin(true)}
+          goal={goal} name={form.name} isPro={true} isLoggedIn={!!user}
+          onUpgrade={() => {}} onLogin={() => setShowLogin(true)}
           measurements={savedMeasurements}
           onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
         />
@@ -661,7 +606,7 @@ export default function Home() {
               <div>
                 <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:4 }}>{loginStep==='email'?'LOGIN':'VERIFY EMAIL'}</div>
                 <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>{loginStep==='email'?'Welcome back':'Check your email'}</h2>
-                <p style={{ fontSize:13, color:'#64748b' }}>{loginStep==='email'?'Login to view your progress history':`Code sent to ${loginEmail}`}</p>
+                <p style={{ fontSize:13, color:'#64748b' }}>{loginStep==='email'?'Login to save your progress':'Code sent to '+loginEmail}</p>
               </div>
               <button onClick={() => { setShowLogin(false); setLoginStep('email'); setLoginError('') }} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
             </div>
@@ -681,18 +626,6 @@ export default function Home() {
             )}
           </div>
         </div>
-      )}
-
-      {/* UPGRADE MODAL */}
-      {showUpgrade && (
-        <UpgradeModal onClose={() => setShowUpgrade(false)} identifier={userIp} freeLeft={freeLeft} currentCredits={credits}
-          onSuccess={(newCredits) => {
-            setCredits(newCredits); setIsPro(newCredits>0); setShowUpgrade(false)
-            const wasBlocked = blockedRef.current; blockedRef.current=false
-            void refreshUsage()
-            if (wasBlocked) setTimeout(() => void runAnalysis(), 300)
-          }}
-        />
       )}
 
       <style>{`

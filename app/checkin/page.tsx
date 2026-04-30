@@ -28,7 +28,7 @@ export default function CheckinPage() {
   useEffect(() => {
     async function init() {
       const user = await getUser()
-      if (!user) { window.location.href = '/?login=1'; return }
+      if (!user) { window.location.href = '/'; return }
       const [profile, lastCheckin, history] = await Promise.all([getProfile(), getLastCheckin(), getCheckinHistory(4)])
       setName(profile?.name ?? '')
       setLast(lastCheckin)

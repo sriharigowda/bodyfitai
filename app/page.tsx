@@ -1,319 +1,698 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { getUser, signOut } from '@/lib/auth'
-import { getSavedAnalyses } from '@/lib/userdata'
-import { getProfile } from '@/lib/profile'
-import { getCheckinHistory } from '@/lib/checkin'
-import type { SavedAnalysis } from '@/lib/userdata'
-import type { WeeklyCheckin } from '@/lib/checkin'
+import { getUser, sendOTP, verifyOTP, signOut } from '@/lib/auth'
+import { getProfile, saveProfile } from '@/lib/profile'
+import type { Measurements, Goal, ActivityLevel, Gender, DietType, DietDays } from '@/lib/calculations'
+import ResultsPage from '@/components/ResultsPage'
+import UpgradeModal from '@/components/UpgradeModal'
+import { hasCheckedInThisWeek, isMonday } from '@/lib/checkin'
 
-const SLOT_LABELS: Record<number, string> = { 1:'Baseline', 2:'Previous', 3:'Latest' }
+type Unit   = 'metric' | 'imperial'
+type Screen = 'home' | 'form' | 'analyzing' | 'results'
 
-function diff(a: number, b: number, lower = false) {
-  const d = b - a
-  if (Math.abs(d) < 0.1) return { text:'—', color:'#94a3b8' }
-  const better = lower ? d < 0 : d > 0
-  return { text:`${d>0?'+':''}${d.toFixed(1)}`, color:better?'#10b981':'#ef4444' }
-}
-
-function MiniChart({ data, color }: { data: number[]; color: string }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-  useEffect(() => {
-    const c = ref.current; if (!c || data.length < 2) return
-    const ctx = c.getContext('2d'); if (!ctx) return
-    const W=c.width, H=c.height, pad=8
-    const min=Math.min(...data)-1, max=Math.max(...data)+1, range=max-min||1
-    ctx.clearRect(0,0,W,H)
-    const grad = ctx.createLinearGradient(0,0,0,H)
-    grad.addColorStop(0, color+'25'); grad.addColorStop(1, color+'00')
-    ctx.fillStyle = grad
-    ctx.beginPath()
-    data.forEach((v,i) => { const x=pad+(i/(data.length-1))*(W-pad*2); const y=H-pad-((v-min)/range)*(H-pad*2); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y) })
-    ctx.lineTo(pad+(W-pad*2),H); ctx.lineTo(pad,H); ctx.closePath(); ctx.fill()
-    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin='round'
-    data.forEach((v,i) => { const x=pad+(i/(data.length-1))*(W-pad*2); const y=H-pad-((v-min)/range)*(H-pad*2); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y) })
-    ctx.stroke()
-    data.forEach((v,i) => { const x=pad+(i/(data.length-1))*(W-pad*2); const y=H-pad-((v-min)/range)*(H-pad*2); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=color; ctx.fill() })
-  }, [data, color])
-
-  if (data.length < 2) return <div style={{ height:72, display:'flex', alignItems:'center', justifyContent:'center', color:'#cbd5e1', fontSize:12 }}>Need 2+ entries</div>
-  return <canvas ref={ref} width={400} height={72} style={{ width:'100%', height:72 }}/>
+const GOALS = [
+  { value: 'Weight loss'          as Goal, icon: '🔥', title: 'Lose weight',  desc: 'Burn fat, get lean' },
+  { value: 'Muscle gain'          as Goal, icon: '💪', title: 'Build muscle', desc: 'Gain size & strength' },
+  { value: 'Maintain weight'      as Goal, icon: '⚖️', title: 'Maintain',     desc: 'Stay at current weight' },
+  { value: 'Athletic performance' as Goal, icon: '🏃', title: 'Performance',  desc: 'Train like an athlete' },
+]
+const ACTIVITIES = [
+  { value: 'Sedentary'         as ActivityLevel, label: 'Sedentary',         sub: 'Desk job, little exercise' },
+  { value: 'Lightly active'    as ActivityLevel, label: 'Lightly active',    sub: '1–3 workouts/week' },
+  { value: 'Moderately active' as ActivityLevel, label: 'Moderately active', sub: '3–5 workouts/week' },
+  { value: 'Very active'       as ActivityLevel, label: 'Very active',       sub: '6–7 workouts/week' },
+]
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+const defaultForm = {
+  name:'', age:'', gender:'', height:'', weight:'',
+  neck:'', aroundShoulder:'', chest:'', bicep:'', forearm:'', wrist:'', stomach:'',
+  hip:'', thigh:'', knee:'', calf:'', ankle:'', targetWeight:'',
 }
 
 const G = {
-  glass: { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, boxShadow:'0 2px 16px rgba(59,130,246,0.06)' },
+  nav:      { background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'13px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky' as const, top:0, zIndex:10 },
+  glass:    { background:'rgba(255,255,255,0.55)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border:'0.5px solid rgba(255,255,255,0.85)', borderRadius:14, boxShadow:'0 4px 24px rgba(59,130,246,0.08)' },
+  glassB:   { background:'rgba(59,130,246,0.08)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:14 },
+  btn:      { background:'#3b82f6', border:'none', borderRadius:12, padding:'13px 0', color:'white', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(59,130,246,0.28)', transition:'all 0.15s' } as const,
+  btnGhost: { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(8px)', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:12, padding:'12px 0', color:'#64748b', fontSize:14, cursor:'pointer', transition:'all 0.15s' } as const,
 }
 
-export default function ProgressPage() {
-  const [user,      setUser]      = useState<any>(null)
-  const [name,      setName]      = useState('')
-  const [analyses,  setAnalyses]  = useState<SavedAnalysis[]>([])
-  const [checkins,  setCheckins]  = useState<WeeklyCheckin[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [tab,       setTab]       = useState<'analyses'|'checkins'>('analyses')
+export default function Home() {
+  const [screen,       setScreen]       = useState<Screen>('home')
+  const [step,         setStep]         = useState(1)
+  const [unit,         setUnit]         = useState<Unit>('metric')
+  const [form,         setForm]         = useState(defaultForm)
+  const [goal,         setGoal]         = useState<Goal>('Weight loss')
+  const [activity,     setActivity]     = useState<ActivityLevel>('Moderately active')
+  const [dietType,     setDietType]     = useState<DietType>('Non-vegetarian')
+  const [nonVegDays,   setNonVegDays]   = useState<string[]>(['Monday','Wednesday','Friday','Saturday'])
+  const [analyzeMsg,   setAnalyzeMsg]   = useState('Calculating body fat...')
+  const [analyzeStep,  setAnalyzeStep]  = useState(0)
+  const [apiData,      setApiData]      = useState<any>(null)
+  const [savedMeasurements, setSavedMeasurements] = useState<any>(null)
+  const [error,        setError]        = useState('')
+  const [fieldErrors,  setFieldErrors]  = useState<Record<string,string>>({})
+  const [freeLeft,     setFreeLeft]     = useState<number | undefined>(undefined)
+  const [credits,      setCredits]      = useState(0)
+  const [isPro,        setIsPro]        = useState(false)
+  const [showUpgrade,  setShowUpgrade]  = useState(false)
+  const blockedRef = useRef(false)
+  const [userIp,       setUserIp]       = useState('anonymous')
+  const [user,         setUser]         = useState<any>(null)
+  const [authLoading,  setAuthLoading]  = useState(true)
+  const [showLogin,    setShowLogin]    = useState(false)
+  const [showCheckin,  setShowCheckin]  = useState(false)
+  const [checkinDue,   setCheckinDue]   = useState(false)
+  const [loginEmail,   setLoginEmail]   = useState('')
+  const [loginOtp,     setLoginOtp]     = useState('')
+  const [loginStep,    setLoginStep]    = useState<'email'|'otp'>('email')
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError,   setLoginError]   = useState('')
 
+  // ── Load user on mount ──────────────────────────────────────────────────────
   useEffect(() => {
-    async function load() {
-      const u = await getUser()
-      if (!u) { window.location.href = '/?login=1'; return }
-      setUser(u)
-      const [profile, data, history] = await Promise.all([getProfile(), getSavedAnalyses(), getCheckinHistory(12)])
-      setName(profile?.name ?? '')
-      setAnalyses(data)
-      setCheckins(history)
-      setLoading(false)
+    let cancelled = false
+
+    async function init() {
+      try {
+        const u = await getUser()
+        if (cancelled) return
+
+        setUser(u)
+
+        if (u) {
+          // Load profile + checkin status in parallel
+          const [profile, checkedIn] = await Promise.all([
+            getProfile(),
+            hasCheckedInThisWeek().catch(() => false),
+          ])
+          if (cancelled) return
+
+          if (profile?.name) {
+            setForm(f => ({ ...f, name: profile.name }))
+          } else {
+            // No profile name yet — check localStorage fallback
+            const saved = localStorage.getItem('bodyfitai_user_name')
+            if (saved) setForm(f => ({ ...f, name: saved }))
+          }
+
+          if (!checkedIn) {
+            setCheckinDue(true)
+            if (isMonday()) setTimeout(() => setShowCheckin(true), 3000)
+          }
+        } else {
+          // Guest — load name from localStorage only
+          const saved = localStorage.getItem('bodyfitai_user_name')
+          if (saved) setForm(f => ({ ...f, name: saved }))
+        }
+      } catch (e) {
+        console.error('Auth init error:', e)
+      } finally {
+        if (!cancelled) setAuthLoading(false)
+      }
     }
-    load()
+
+    init()
+
+    // Handle ?login=1 redirect param
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('login') === '1') {
+        setShowLogin(true)
+        window.history.replaceState({}, '', '/')
+      }
+    }
+
+    return () => { cancelled = true }
   }, [])
 
-  const latest = analyses[analyses.length - 1]
-  const first  = analyses[0]
-  const bfData     = analyses.map(a => a.body_fat)
-  const weightData = analyses.map(a => a.weight)
-  const leanData   = analyses.map(a => a.lean_mass)
-  const checkinBf  = checkins.map(c => c.body_fat)
-  const checkinW   = checkins.map(c => c.weight)
-  const checkinWaist = checkins.map(c => c.waist)
+  // ── OTP handlers ────────────────────────────────────────────────────────────
+  async function handleSendOTP() {
+    if (!loginEmail.trim() || !loginEmail.includes('@')) { setLoginError('Enter a valid email'); return }
+    setLoginLoading(true); setLoginError('')
+    const { error } = await sendOTP(loginEmail)
+    if (error) { setLoginError(error); setLoginLoading(false); return }
+    setLoginStep('otp'); setLoginLoading(false)
+  }
 
-  if (loading) return (
-    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe,#f0f7ff)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ width:36, height:36, border:'2px solid rgba(59,130,246,0.15)', borderTopColor:'#3b82f6', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+  async function handleVerifyOTP() {
+    if (loginOtp.length !== 6) { setLoginError('Enter the 6-digit code'); return }
+    setLoginLoading(true); setLoginError('')
+    const { error } = await verifyOTP(loginEmail, loginOtp)
+    if (error) { setLoginError('Invalid or expired code'); setLoginLoading(false); return }
+
+    const u = await getUser()
+    setUser(u)
+
+    if (u) {
+      const profile = await getProfile()
+      if (!profile?.name) {
+        // New user — redirect to onboarding ONCE
+        window.location.replace('/onboarding')
+        return
+      }
+      setForm(f => ({ ...f, name: profile.name }))
+
+      // Check weekly check-in
+      const checkedIn = await hasCheckedInThisWeek().catch(() => false)
+      if (!checkedIn) {
+        setCheckinDue(true)
+        if (isMonday()) setTimeout(() => setShowCheckin(true), 1000)
+      }
+    }
+
+    setShowLogin(false)
+    setLoginStep('email')
+    setLoginEmail('')
+    setLoginOtp('')
+    setLoginLoading(false)
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    setUser(null)
+    setCheckinDue(false)
+    setShowCheckin(false)
+    setForm(f => ({ ...f, name: localStorage.getItem('bodyfitai_user_name') || '' }))
+  }
+
+  // ── Usage / credits ─────────────────────────────────────────────────────────
+  async function refreshUsage() {
+    try {
+      const headers: Record<string,string> = {}
+      const u = await getUser()
+      if (u?.id) headers['x-user-id'] = u.id
+      const d = await fetch('/api/usage', { headers }).then(r => r.json())
+      setFreeLeft(d.freeLeft ?? 0)
+      setCredits(d.credits ?? 0)
+      setIsPro(d.isPro ?? false)
+      if (d.identifier) setUserIp(d.identifier)
+    } catch {}
+  }
+
+  useEffect(() => { void refreshUsage() }, [])
+
+  // ── Form helpers ─────────────────────────────────────────────────────────────
+  const ul  = (lbl: string) => `${lbl} (${unit==='metric'?'cm':'in'})`
+  const uw  = unit==='metric' ? 'Weight (kg)' : 'Weight (lbs)'
+  const uh  = unit==='metric' ? 'Height (cm)' : 'Height (in)'
+  const setF = (k: string, v: string) => {
+    setForm(f => ({ ...f, [k]: v }))
+    if (fieldErrors[k]) setFieldErrors(p => { const n={...p}; delete n[k]; return n })
+  }
+  const toggleDay = (d: string) => setNonVegDays(p => p.includes(d) ? p.filter(x=>x!==d) : [...p,d])
+
+  function validate(n: number) {
+    const e: Record<string,string> = {}
+    if (n===1) {
+      if (!user && !form.name.trim()) e.name = 'Please enter your name'
+      if (!form.age || +form.age<10 || +form.age>100) e.age = 'Valid age (10–100)'
+      if (!form.gender) e.gender = 'Select gender'
+      if (!form.height || +form.height<=0) e.height = 'Enter height'
+      if (!form.weight || +form.weight<=0) e.weight = 'Enter weight'
+    }
+    if (n===2) ['neck','aroundShoulder','chest','bicep','forearm','wrist','stomach'].forEach(k => { if (!(form as any)[k] || +((form as any)[k])<=0) e[k]='Required' })
+    if (n===3) ['hip','thigh','knee','calf','ankle'].forEach(k => { if (!(form as any)[k] || +((form as any)[k])<=0) e[k]='Required' })
+    if (n===4) {
+      if (!form.targetWeight || +form.targetWeight<=0) e.targetWeight='Enter target weight'
+      if (dietType==='Mixed' && nonVegDays.length===0) e.nonVegDays='Pick at least one non-veg day'
+    }
+    setFieldErrors(e)
+    return Object.keys(e).length===0
+  }
+
+  const tryNext = (n: number) => {
+    if (!validate(n-1)) return
+    if (n===2 && form.name.trim()) {
+      localStorage.setItem('bodyfitai_user_name', form.name.trim())
+      if (user) void saveProfile(form.name.trim())
+    }
+    setStep(n)
+  }
+
+  const tryAnalyze = () => {
+    if (!validate(4)) return
+    if (!user && freeLeft!==undefined && freeLeft<=0) { setShowLogin(true); return }
+    void runAnalysis()
+  }
+
+  const toM = (v: string, t: 'weight'|'length') => {
+    const n = parseFloat(v)||0
+    return unit==='imperial' ? (t==='weight' ? n*0.453592 : n*2.54) : n
+  }
+
+  // ── Analysis ─────────────────────────────────────────────────────────────────
+  async function runAnalysis() {
+    setScreen('analyzing'); setAnalyzeStep(0)
+    const msgs = ['Calculating body fat...','Estimating BMR & TDEE...','Building macro plan...','Generating AI insights...']
+    let i=0; setAnalyzeMsg(msgs[0])
+    const iv = setInterval(() => { i++; if (i<msgs.length) { setAnalyzeMsg(msgs[i]); setAnalyzeStep(i) } }, 900)
+    try {
+      const diet: DietDays = {
+        type: dietType,
+        nonVegDays: dietType==='Vegetarian'?[]:dietType==='Non-vegetarian'?DAYS:nonVegDays,
+      }
+      const measurements: Measurements = {
+        name: form.name.trim(), age: +form.age||25, gender: (form.gender as Gender)||'Male',
+        height: toM(form.height,'length')||175, weight: toM(form.weight,'weight')||75,
+        neck: toM(form.neck,'length')||38, aroundShoulder: toM(form.aroundShoulder,'length')||110,
+        chest: toM(form.chest,'length')||95, bicep: toM(form.bicep,'length')||33,
+        forearm: toM(form.forearm,'length')||28, wrist: toM(form.wrist,'length')||17,
+        stomach: toM(form.stomach,'length')||85, hip: toM(form.hip,'length')||95,
+        thigh: toM(form.thigh,'length')||55, knee: toM(form.knee,'length')||37,
+        calf: toM(form.calf,'length')||37, ankle: toM(form.ankle,'length')||22,
+        goal, targetWeight: toM(form.targetWeight,'weight')||toM(form.weight,'weight')-5,
+        activityLevel: activity, diet,
+      }
+      setSavedMeasurements(measurements)
+      if (measurements.name) {
+        localStorage.setItem('bodyfitai_user_name', measurements.name)
+        if (user) void saveProfile(measurements.name)
+      }
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' }
+      const cu = await getUser(); if (cu?.id) headers['x-user-id'] = cu.id
+      const data = await fetch('/api/analyze', { method:'POST', headers, body:JSON.stringify({ measurements }) }).then(r=>r.json())
+      clearInterval(iv)
+      if (data.error==='FREE_LIMIT_REACHED') {
+        setScreen('form')
+        if (!user) setShowLogin(true)
+        else { blockedRef.current=true; setShowUpgrade(true) }
+        return
+      }
+      if (data.error) { setError(data.error); setScreen('form'); return }
+      setApiData(data); setScreen('results'); await refreshUsage()
+    } catch {
+      clearInterval(iv); setError('Something went wrong. Please try again.'); setScreen('form')
+    }
+  }
+
+  // ── Render helpers ────────────────────────────────────────────────────────────
+  const progress = `${step*25}%`
+  const eb  = (k: string) => `0.5px solid ${fieldErrors[k]?'#fca5a5':'rgba(255,255,255,0.9)'}`
+  const ebg = (k: string) => fieldErrors[k] ? 'rgba(254,202,202,0.3)' : undefined
+  const FE  = ({ k }: { k: string }) => fieldErrors[k] ? <div style={{ fontSize:11, color:'#ef4444', marginTop:4 }}>{fieldErrors[k]}</div> : null
+  const hasErr = Object.keys(fieldErrors).length>0
+  const lbl = (k: string) => ({ fontSize:12, color:fieldErrors[k]?'#ef4444':'#64748b', display:'block' as const, marginBottom:6, fontWeight:500 as const })
+
+  // ── Auth loading screen ───────────────────────────────────────────────────────
+  if (authLoading) return (
+    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+        <div style={{ width:40, height:40, border:'2px solid rgba(59,130,246,0.15)', borderTopColor:'#3b82f6', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+        <div style={{ fontSize:20, fontWeight:500, color:'#1e293b' }}>BodyFit<span style={{ color:'#3b82f6' }}>AI</span></div>
+      </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   return (
-    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)', color:'#1e293b', position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'fixed', top:-120, left:-120, width:400, height:400, background:'radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
-      <div style={{ position:'fixed', bottom:-80, right:-80, width:320, height:320, background:'radial-gradient(circle,rgba(99,179,246,0.08) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
+    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)' }}>
 
       {/* NAV */}
-      <nav style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'13px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10 }}>
-        <a href="/" style={{ fontSize:18, fontWeight:500, textDecoration:'none', color:'#1e293b' }}>BodyFit<span style={{ color:'#3b82f6' }}>AI</span></a>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <a href="/checkin" style={{ fontSize:12, color:'#3b82f6', textDecoration:'none', background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:20, padding:'5px 12px', fontWeight:500 }}>+ Check in</a>
-          <button onClick={async () => { await signOut(); window.location.href='/' }} style={{ background:'rgba(255,255,255,0.60)', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, padding:'5px 12px', color:'#64748b', fontSize:12, cursor:'pointer' }}>Sign out</button>
+      <nav style={G.nav}>
+        <div style={{ fontSize:18, fontWeight:500, color:'#1e293b', cursor:'pointer', letterSpacing:'-0.3px' }} onClick={() => { setScreen('home'); setStep(1) }}>
+          BodyFit<span style={{ color:'#3b82f6' }}>AI</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {screen==='form' && <span style={{ fontSize:12, color:'#94a3b8' }}>Step {step} of 4</span>}
+          {screen==='results' && <button onClick={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null) }} style={{ fontSize:12, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Start over</button>}
+          {freeLeft!==undefined && <span style={{ fontSize:11, color:'#94a3b8' }}>{freeLeft>0?`${freeLeft} free left`:credits>0?`${credits} credits`:'0 left'}</span>}
+          {user ? (
+            <>
+              {isPro
+                ? <span style={{ fontSize:11, background:'rgba(16,185,129,0.10)', color:'#10b981', padding:'3px 10px', borderRadius:20, fontWeight:500, border:'0.5px solid rgba(16,185,129,0.25)' }}>Pro</span>
+                : <button onClick={() => { blockedRef.current=false; setShowUpgrade(true) }} style={{ fontSize:11, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', color:'#3b82f6', padding:'4px 12px', borderRadius:20, cursor:'pointer', fontWeight:500 }}>
+                    {credits===0&&freeLeft===0?'Buy credits':'+ Add more'}
+                  </button>
+              }
+              {form.name && <span style={{ fontSize:12, color:'#475569', fontWeight:500 }}>{form.name.split(' ')[0]}</span>}
+              <a href="/progress" style={{ fontSize:11, color:'#64748b', textDecoration:'none', padding:'4px 10px', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, background:'rgba(255,255,255,0.60)' }}>📊 Progress</a>
+              <button onClick={handleSignOut} style={{ fontSize:11, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
+            </>
+          ) : (
+            <button onClick={() => setShowLogin(true)} style={{ fontSize:11, color:'white', background:'#3b82f6', border:'none', borderRadius:20, padding:'5px 14px', cursor:'pointer', fontWeight:500, boxShadow:'0 2px 8px rgba(59,130,246,0.30)' }}>Login</button>
+          )}
         </div>
       </nav>
 
-      <div style={{ maxWidth:700, margin:'0 auto', padding:'32px 20px', position:'relative', zIndex:1 }}>
+      {/* COMING SOON BANNER */}
+      <div style={{ background:'rgba(59,130,246,0.06)', borderBottom:'0.5px solid rgba(59,130,246,0.12)', padding:'8px 20px', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+        <span style={{ fontSize:10, background:'#3b82f6', color:'white', padding:'2px 8px', borderRadius:10, fontWeight:600, letterSpacing:'0.04em' }}>COMING SOON</span>
+        <span style={{ fontSize:12, color:'#3b82f6' }}>Workout plan · Supplement guide · Transformation challenge</span>
+      </div>
 
-        {/* Greeting */}
-        <div style={{ marginBottom:28 }}>
-          <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:8 }}>MY PROGRESS</div>
-          <h1 style={{ fontSize:28, fontWeight:500, color:'#1e293b', marginBottom:6, letterSpacing:'-0.3px' }}>
-            Hi {name||'there'}, here's your progress 💪
-          </h1>
-          <p style={{ fontSize:14, color:'#64748b', lineHeight:1.6 }}>
-            {analyses.length===0 ? 'No saved analyses yet. Complete an analysis and save your progress.'
-              : analyses.length===1 ? '1 entry saved. Do another analysis to start tracking your journey.'
-              : `${analyses.length} entries · ${checkins.length} weekly check-ins`}
-          </p>
-        </div>
-
-        {/* Empty state */}
-        {analyses.length === 0 && checkins.length === 0 && (
-          <div style={{ ...G.glass, padding:'48px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>📊</div>
-            <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:8 }}>No progress saved yet</h2>
-            <p style={{ fontSize:14, color:'#64748b', marginBottom:24, lineHeight:1.6, maxWidth:320, margin:'0 auto 24px' }}>
-              Complete a body analysis and click "Save my progress" to start tracking your fitness journey.
-            </p>
-            <a href="/" style={{ background:'#3b82f6', borderRadius:10, padding:'12px 32px', fontSize:14, fontWeight:600, color:'white', textDecoration:'none', display:'inline-block', boxShadow:'0 4px 16px rgba(59,130,246,0.28)' }}>
-              Start my first analysis →
-            </a>
+      {/* CHECKIN BANNER */}
+      {user && checkinDue && (
+        <div style={{ background:'rgba(59,130,246,0.05)', borderBottom:'0.5px solid rgba(59,130,246,0.12)', padding:'9px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span>📊</span>
+            <span style={{ fontSize:12, color:'#3b82f6' }}>{isMonday()?'It\'s Monday! Time for your weekly check-in.':'Your weekly check-in is due.'}</span>
           </div>
-        )}
+          <a href="/checkin" style={{ fontSize:11, background:'rgba(59,130,246,0.10)', border:'0.5px solid rgba(59,130,246,0.25)', color:'#3b82f6', padding:'4px 12px', borderRadius:20, textDecoration:'none', fontWeight:500, whiteSpace:'nowrap' as const }}>Check in →</a>
+        </div>
+      )}
 
-        {/* Tabs */}
-        {(analyses.length > 0 || checkins.length > 0) && (
-          <>
-            <div style={{ display:'flex', gap:8, marginBottom:24 }}>
-              {[{k:'analyses',l:`Analyses (${analyses.length})`},{k:'checkins',l:`Weekly check-ins (${checkins.length})`}].map(t => (
-                <button key={t.k} onClick={() => setTab(t.k as any)}
-                  style={{ padding:'8px 18px', borderRadius:20, border:`0.5px solid ${tab===t.k?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.9)'}`, background:tab===t.k?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.60)', color:tab===t.k?'#3b82f6':'#64748b', fontSize:13, cursor:'pointer', fontWeight:tab===t.k?500:400, transition:'all 0.2s' }}>
-                  {t.l}
-                </button>
-              ))}
+      {/* HOME */}
+      {screen==='home' && (
+        <div style={{ maxWidth:480, margin:'0 auto', padding:'40px 20px' }}>
+          <div className="fade-up" style={{ textAlign:'center', marginBottom:40 }}>
+            {form.name && (
+              <div style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:10, letterSpacing:'-0.3px' }}>
+                Welcome, <span style={{ color:'#3b82f6' }}>{form.name.split(' ')[0]}</span>! 👋
+              </div>
+            )}
+            <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:20, padding:'5px 14px', fontSize:11, color:'#3b82f6', fontWeight:500, marginBottom:20, letterSpacing:'0.04em' }}>
+              <span style={{ width:6, height:6, background:'#3b82f6', borderRadius:'50%', display:'inline-block', animation:'pulse 2s infinite' }}/>
+              AI-POWERED FITNESS ANALYSIS
             </div>
+            <h1 style={{ fontSize:34, fontWeight:500, lineHeight:1.2, color:'#1e293b', marginBottom:12, letterSpacing:'-0.4px' }}>
+              Your body.<br/><span style={{ color:'#3b82f6' }}>Analyzed by AI.</span>
+            </h1>
+            <p style={{ fontSize:15, color:'#64748b', lineHeight:1.7, margin:'0 auto 28px', maxWidth:340 }}>
+              Enter your body measurements and get a personalized calorie target, macro split, FFMI score, and full diet plan.
+            </p>
+            <button onClick={() => setScreen('form')} style={{ ...G.btn, width:'100%', maxWidth:300, display:'block', margin:'0 auto 10px', fontSize:15, padding:'14px 0' }}>
+              Get my free plan →
+            </button>
+            <p style={{ fontSize:12, color:'#94a3b8', marginTop:6 }}>
+              {!user?'1 free analysis · No account needed'
+                :isPro?'Unlimited analyses'
+                :freeLeft===undefined?''
+                :freeLeft>0?`${freeLeft} free ${freeLeft===1?'analysis':'analyses'} remaining`
+                :credits>0?`${credits} credits remaining`
+                :'No analyses left'}
+            </p>
+            {user && checkinDue && (
+              <a href="/checkin" style={{ display:'inline-block', marginTop:12, fontSize:12, color:'#3b82f6', textDecoration:'none', background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:20, padding:'5px 14px' }}>
+                📊 Weekly check-in due →
+              </a>
+            )}
+          </div>
+          <div className="fade-up-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            {[
+              { icon:'💪', title:'Body fat + FFMI', desc:'Full body composition analysis' },
+              { icon:'🔥', title:'Calorie targets',  desc:'Daily intake + burn goals' },
+              { icon:'📊', title:'Macro split',       desc:'Protein, carbs, fat & fiber' },
+              { icon:'🥗', title:'Diet plan',         desc:'Veg/non-veg day-by-day' },
+            ].map((f,i) => (
+              <div key={i} style={{ ...G.glass, padding:'16px 14px', transition:'transform 0.2s, box-shadow 0.2s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform='translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow='0 8px 28px rgba(59,130,246,0.14)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform=''; (e.currentTarget as HTMLElement).style.boxShadow='' }}>
+                <div style={{ fontSize:22, marginBottom:8 }}>{f.icon}</div>
+                <div style={{ fontSize:13, fontWeight:500, color:'#1e293b', marginBottom:3 }}>{f.title}</div>
+                <div style={{ fontSize:11, color:'#94a3b8', lineHeight:1.4 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {/* ANALYSES TAB */}
-            {tab === 'analyses' && analyses.length > 0 && (
-              <>
-                {/* Key metrics */}
-                {latest && (
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:10, marginBottom:20 }}>
-                    {[
-                      { label:'Weight',    value:`${latest.weight}kg`,    color:'#3b82f6' },
-                      { label:'Body fat',  value:`${latest.body_fat}%`,   color:'#ef4444' },
-                      { label:'Lean mass', value:`${latest.lean_mass}kg`, color:'#10b981' },
-                      { label:'FFMI',      value:`${latest.ffmi}`,        color:'#f59e0b' },
-                    ].map((m, i) => (
-                      <div key={i} style={{ ...G.glass, padding:'14px 16px' }}>
-                        <div style={{ fontSize:10, color:'#94a3b8', marginBottom:6, letterSpacing:'0.05em' }}>{m.label.toUpperCase()}</div>
-                        <div style={{ fontSize:22, fontWeight:500, color:m.color }}>{m.value}</div>
-                        {first && latest !== first && (
-                          <div style={{ fontSize:11, color:diff(+(first[m.label==='Weight'?'weight':m.label==='Body fat'?'body_fat':m.label==='Lean mass'?'lean_mass':'ffmi'] as any), +(latest[m.label==='Weight'?'weight':m.label==='Body fat'?'body_fat':m.label==='Lean mass'?'lean_mass':'ffmi'] as any), m.label==='Body fat'||m.label==='Weight').color, marginTop:4 }}>
-                            {diff(+(first[m.label==='Weight'?'weight':m.label==='Body fat'?'body_fat':m.label==='Lean mass'?'lean_mass':'ffmi'] as any), +(latest[m.label==='Weight'?'weight':m.label==='Body fat'?'body_fat':m.label==='Lean mass'?'lean_mass':'ffmi'] as any), m.label==='Body fat'||m.label==='Weight').text} since start
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+      {/* FORM */}
+      {screen==='form' && (
+        <div style={{ maxWidth:480, margin:'0 auto', padding:'24px 20px' }}>
+          <div style={{ height:4, background:'rgba(59,130,246,0.12)', borderRadius:2, marginBottom:28 }}>
+            <div style={{ height:4, background:'linear-gradient(90deg,#3b82f6,#60a5fa)', borderRadius:2, width:progress, transition:'width 0.4s ease', boxShadow:'0 0 8px rgba(59,130,246,0.35)' }}/>
+          </div>
+          {error && <div style={{ background:'rgba(254,202,202,0.5)', border:'0.5px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626' }}>{error}</div>}
+          {hasErr && <div style={{ background:'rgba(254,202,202,0.4)', border:'0.5px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', display:'flex', alignItems:'center', gap:8 }}>⚠ Please fill in all required fields.</div>}
 
-                {/* Charts */}
-                {analyses.length >= 2 && (
-                  <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
-                    {[
-                      { label:'Body fat %', data:bfData,     color:'#ef4444', unit:'%' },
-                      { label:'Weight',     data:weightData, color:'#3b82f6', unit:'kg' },
-                      { label:'Lean mass',  data:leanData,   color:'#10b981', unit:'kg' },
-                    ].map((chart, i) => (
-                      <div key={i} style={{ ...G.glass, padding:'16px 16px 12px' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{chart.label}</div>
-                          <div style={{ display:'flex', gap:16 }}>
-                            {analyses.map((a, idx) => (
-                              <div key={idx} style={{ textAlign:'center' }}>
-                                <div style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>{SLOT_LABELS[a.slot]}</div>
-                                <div style={{ fontSize:13, fontWeight:500, color:idx===analyses.length-1?chart.color:'#64748b' }}>
-                                  {(chart.data[idx]??0).toFixed(1)}{chart.unit}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <MiniChart data={chart.data} color={chart.color}/>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Comparison table */}
-                <div style={{ ...G.glass, overflow:'hidden', marginBottom:24 }}>
-                  <div style={{ padding:'14px 20px', borderBottom:'0.5px solid rgba(59,130,246,0.08)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>Detailed comparison</div>
-                    <div style={{ fontSize:11, color:'#94a3b8' }}>🟢 better · 🔴 needs work</div>
-                  </div>
-                  <div style={{ overflowX:'auto' }}>
-                    <table style={{ width:'100%', borderCollapse:'collapse', minWidth:380 }}>
-                      <thead>
-                        <tr style={{ background:'rgba(59,130,246,0.04)' }}>
-                          <th style={{ padding:'10px 16px', fontSize:11, color:'#94a3b8', textAlign:'left', fontWeight:500 }}>Metric</th>
-                          {analyses.map(a => (
-                            <th key={a.slot} style={{ padding:'10px 16px', fontSize:11, color:a.slot===analyses.length?'#3b82f6':'#94a3b8', textAlign:'center', fontWeight:500 }}>
-                              {SLOT_LABELS[a.slot]}
-                              <div style={{ fontSize:10, color:'#cbd5e1', fontWeight:400 }}>{new Date(a.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
-                            </th>
-                          ))}
-                          {analyses.length >= 2 && <th style={{ padding:'10px 16px', fontSize:11, color:'#94a3b8', textAlign:'center', fontWeight:500 }}>Change</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { label:'Weight',       key:'weight',         unit:'kg',   lower:true },
-                          { label:'Body fat %',   key:'body_fat',       unit:'%',    lower:true },
-                          { label:'Lean mass',    key:'lean_mass',      unit:'kg',   lower:false },
-                          { label:'FFMI',         key:'ffmi',           unit:'',     lower:false },
-                          { label:'Waist',        key:'stomach',        unit:'cm',   lower:true },
-                          { label:'Chest',        key:'chest',          unit:'cm',   lower:false },
-                          { label:'Calories/day', key:'daily_calories', unit:'kcal', lower:false },
-                          { label:'Protein',      key:'protein',        unit:'g',    lower:false },
-                        ].map((row, i) => (
-                          <tr key={row.key} style={{ borderTop:'0.5px solid rgba(59,130,246,0.07)', background:i%2===0?'transparent':'rgba(255,255,255,0.30)' }}>
-                            <td style={{ padding:'10px 16px', fontSize:13, color:'#64748b' }}>{row.label}</td>
-                            {analyses.map(a => (
-                              <td key={a.slot} style={{ padding:'10px 16px', fontSize:13, textAlign:'center', fontWeight:a.slot===analyses.length?500:400, color:a.slot===analyses.length?'#1e293b':'#64748b' }}>
-                                {(a as any)[row.key]}{row.unit}
-                              </td>
-                            ))}
-                            {analyses.length >= 2 && (() => {
-                              const d = diff(+(analyses[0] as any)[row.key], +(analyses[analyses.length-1] as any)[row.key], row.lower)
-                              return <td style={{ padding:'10px 16px', textAlign:'center', fontSize:12, fontWeight:500, color:d.color }}>{d.text}{row.unit}</td>
-                            })()}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {/* STEP 1 */}
+          {step===1 && (
+            <div className="fade-up">
+              <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.08em', marginBottom:6 }}>STEP 1 OF 4</div>
+              <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>Basic info</h2>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>Tell us about yourself</p>
+              <div style={{ display:'flex', gap:8, marginBottom:20 }}>
+                {(['metric','imperial'] as Unit[]).map(ut => (
+                  <button key={ut} onClick={() => setUnit(ut)} style={{ padding:'7px 16px', borderRadius:20, border:`0.5px solid ${unit===ut?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.9)'}`, background:unit===ut?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.60)', color:unit===ut?'#3b82f6':'#64748b', fontSize:12, cursor:'pointer', transition:'all 0.2s', fontWeight:unit===ut?500:400 }}>
+                    {ut==='metric'?'Metric (cm/kg)':'Imperial (in/lbs)'}
+                  </button>
+                ))}
+              </div>
+              {!user && (
+                <div style={{ marginBottom:14 }}>
+                  <label style={lbl('name')}>Full name *</label>
+                  <input placeholder="e.g. Srini Kumar" value={form.name} onChange={e=>setF('name',e.target.value)} style={{ border:eb('name'), background:ebg('name') }}/>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Login to save your progress after analysis</div>
+                  <FE k="name"/>
+                </div>
+              )}
+              {user && form.name && (
+                <div style={{ ...G.glassB, padding:'12px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ fontSize:20 }}>👋</span>
+                  <div>
+                    <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.05em' }}>ANALYZING FOR</div>
+                    <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>{form.name}</div>
                   </div>
                 </div>
-              </>
-            )}
-
-            {/* CHECKINS TAB */}
-            {tab === 'checkins' && (
-              <>
-                {checkins.length === 0 ? (
-                  <div style={{ ...G.glass, padding:'40px 24px', textAlign:'center' }}>
-                    <div style={{ fontSize:40, marginBottom:12 }}>📅</div>
-                    <h2 style={{ fontSize:18, fontWeight:500, color:'#1e293b', marginBottom:8 }}>No check-ins yet</h2>
-                    <p style={{ fontSize:14, color:'#64748b', marginBottom:20 }}>Start your weekly tracking to see your progress here.</p>
-                    <a href="/checkin" style={{ background:'#3b82f6', borderRadius:10, padding:'11px 28px', fontSize:14, fontWeight:600, color:'white', textDecoration:'none', display:'inline-block', boxShadow:'0 4px 14px rgba(59,130,246,0.28)' }}>Start check-in →</a>
-                  </div>
-                ) : (
-                  <>
-                    {/* Checkin charts */}
-                    {checkins.length >= 2 && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
-                        {[
-                          { label:'Body fat % (weekly)', data:checkinBf,    color:'#ef4444', unit:'%' },
-                          { label:'Weight (weekly)',      data:checkinW,     color:'#3b82f6', unit:'kg' },
-                          { label:'Waist (weekly)',       data:checkinWaist, color:'#f59e0b', unit:'cm' },
-                        ].map((chart, i) => (
-                          <div key={i} style={{ ...G.glass, padding:'16px 16px 12px' }}>
-                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                              <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{chart.label}</div>
-                              <div style={{ fontSize:12, color:chart.color, fontWeight:500 }}>
-                                {checkins[checkins.length-1][chart.label.includes('fat')?'body_fat':chart.label.includes('Waist')?'waist':'weight']}{chart.unit}
-                              </div>
-                            </div>
-                            <MiniChart data={chart.data} color={chart.color}/>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Checkin history */}
-                    <div style={{ ...G.glass, overflow:'hidden' }}>
-                      <div style={{ padding:'14px 16px', borderBottom:'0.5px solid rgba(59,130,246,0.08)' }}>
-                        <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>Check-in history</div>
-                      </div>
-                      {[...checkins].reverse().map((c, i) => (
-                        <div key={c.id} style={{ padding:'14px 16px', borderBottom:i<checkins.length-1?'0.5px solid rgba(59,130,246,0.07)':'none', background:i%2===0?'transparent':'rgba(255,255,255,0.30)' }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                            <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>Week {c.week_number}, {c.year}</div>
-                            <div style={{ fontSize:11, color:'#94a3b8' }}>{new Date(c.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
-                          </div>
-                          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-                            {[{l:'Weight',v:c.weight+'kg'},{l:'Waist',v:c.waist+'cm'},{l:'Body fat',v:c.body_fat+'%'},{l:'Chest',v:c.chest+'cm'},{l:'Hip',v:c.hip+'cm'},{l:'Arms',v:c.arms+'cm'}].map(m => (
-                              <div key={m.l} style={{ textAlign:'center' }}>
-                                <div style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>{m.l}</div>
-                                <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>{m.v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {(c.following_diet !== null || c.following_workout !== null) && (
-                            <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                              {c.following_diet !== null && <span style={{ fontSize:11, padding:'2px 8px', borderRadius:10, background:c.following_diet?'rgba(16,185,129,0.10)':'rgba(239,68,68,0.10)', color:c.following_diet?'#10b981':'#ef4444' }}>🥗 Diet: {c.following_diet?'Yes':'No'}</span>}
-                              {c.following_workout !== null && <span style={{ fontSize:11, padding:'2px 8px', borderRadius:10, background:c.following_workout?'rgba(16,185,129,0.10)':'rgba(239,68,68,0.10)', color:c.following_workout?'#10b981':'#ef4444' }}>🏋️ Workout: {c.following_workout?'Yes':'No'}</span>}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            <div style={{ textAlign:'center', marginTop:24 }}>
-              <a href="/" style={{ background:'#3b82f6', borderRadius:10, padding:'12px 32px', fontSize:14, fontWeight:600, color:'white', textDecoration:'none', display:'inline-block', boxShadow:'0 4px 14px rgba(59,130,246,0.28)' }}>New analysis →</a>
+              )}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                <div>
+                  <label style={lbl('age')}>Age *</label>
+                  <input type="text" inputMode="numeric" placeholder="25" value={form.age} onChange={e=>setF('age',e.target.value)} style={{ border:eb('age'), background:ebg('age') }}/>
+                  <FE k="age"/>
+                </div>
+                <div>
+                  <label style={lbl('gender')}>Gender *</label>
+                  <select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{ border:eb('gender'), background:ebg('gender') }}>
+                    <option value="">Select</option><option>Male</option><option>Female</option>
+                  </select>
+                  <FE k="gender"/>
+                </div>
+                <div>
+                  <label style={lbl('height')}>{uh} *</label>
+                  <input type="text" inputMode="decimal" placeholder={unit==='metric'?'175':'69'} value={form.height} onChange={e=>setF('height',e.target.value)} style={{ border:eb('height'), background:ebg('height') }}/>
+                  <FE k="height"/>
+                </div>
+                <div>
+                  <label style={lbl('weight')}>{uw} *</label>
+                  <input type="text" inputMode="decimal" placeholder={unit==='metric'?'75':'165'} value={form.weight} onChange={e=>setF('weight',e.target.value)} style={{ border:eb('weight'), background:ebg('weight') }}/>
+                  <FE k="weight"/>
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setScreen('home'); setFieldErrors({}) }}>Back</button>
+                <button style={{ ...G.btn, flex:2 }} onClick={() => tryNext(2)}>Continue →</button>
+              </div>
             </div>
-          </>
-        )}
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          )}
+
+          {/* STEP 2 */}
+          {step===2 && (
+            <div className="fade-up">
+              <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.08em', marginBottom:6 }}>STEP 2 OF 4</div>
+              <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>Upper body</h2>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>Measure at the widest / fullest point of each area.</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                {[
+                  { key:'neck',           label:'Neck',                 ph:'38' },
+                  { key:'aroundShoulder', label:'Around both shoulders',ph:'110' },
+                  { key:'chest',          label:'Chest',                ph:'95' },
+                  { key:'bicep',          label:'Biceps',               ph:'33' },
+                  { key:'forearm',        label:'Forearm',              ph:'28' },
+                  { key:'wrist',          label:'Wrist',                ph:'17' },
+                  { key:'stomach',        label:'Stomach',              ph:'85' },
+                ].map(f => (
+                  <div key={f.key} style={f.key==='aroundShoulder'||f.key==='stomach'?{gridColumn:'1 / -1'}:{}}>
+                    <label style={lbl(f.key)}>{ul(f.label)} *</label>
+                    <input type="text" inputMode="decimal" placeholder={f.ph} value={(form as any)[f.key]} onChange={e=>setF(f.key,e.target.value)} style={{ border:eb(f.key), background:ebg(f.key) }}/>
+                    <FE k={f.key}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setStep(1); setFieldErrors({}) }}>Back</button>
+                <button style={{ ...G.btn, flex:2 }} onClick={() => tryNext(3)}>Continue →</button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3 */}
+          {step===3 && (
+            <div className="fade-up">
+              <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.08em', marginBottom:6 }}>STEP 3 OF 4</div>
+              <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>Lower body</h2>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>Stand straight, muscles relaxed.</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                {[
+                  { key:'hip',   label:'Hips',   ph:'95' },
+                  { key:'thigh', label:'Thighs', ph:'55' },
+                  { key:'knee',  label:'Knees',  ph:'37' },
+                  { key:'calf',  label:'Calves', ph:'37' },
+                  { key:'ankle', label:'Ankles', ph:'22' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label style={lbl(f.key)}>{ul(f.label)} *</label>
+                    <input type="text" inputMode="decimal" placeholder={f.ph} value={(form as any)[f.key]} onChange={e=>setF(f.key,e.target.value)} style={{ border:eb(f.key), background:ebg(f.key) }}/>
+                    <FE k={f.key}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setStep(2); setFieldErrors({}) }}>Back</button>
+                <button style={{ ...G.btn, flex:2 }} onClick={() => tryNext(4)}>Continue →</button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4 */}
+          {step===4 && (
+            <div className="fade-up">
+              <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.08em', marginBottom:6 }}>STEP 4 OF 4</div>
+              <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>Goal & diet</h2>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>What do you want to achieve?</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+                {GOALS.map(g => (
+                  <div key={g.value} onClick={() => setGoal(g.value)}
+                    style={{ background:goal===g.value?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.55)', backdropFilter:'blur(16px)', border:`0.5px solid ${goal===g.value?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.85)'}`, borderRadius:14, padding:'14px 12px', cursor:'pointer', textAlign:'center', transition:'all 0.2s', boxShadow:goal===g.value?'0 4px 16px rgba(59,130,246,0.15)':'' }}>
+                    <div style={{ fontSize:22, marginBottom:6 }}>{g.icon}</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:goal===g.value?'#3b82f6':'#1e293b', marginBottom:2 }}>{g.title}</div>
+                    <div style={{ fontSize:11, color:'#94a3b8' }}>{g.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <label style={lbl('targetWeight')}>Target {unit==='metric'?'weight (kg)':'weight (lbs)'} *</label>
+                <input type="text" inputMode="decimal" placeholder={unit==='metric'?'70':'154'} value={form.targetWeight} onChange={e=>setF('targetWeight',e.target.value)} style={{ border:eb('targetWeight'), background:ebg('targetWeight') }}/>
+                <FE k="targetWeight"/>
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:10, fontWeight:500 }}>Activity level</label>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {ACTIVITIES.map(a => (
+                    <div key={a.value} onClick={() => setActivity(a.value)}
+                      style={{ background:activity===a.value?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.55)', backdropFilter:'blur(12px)', border:`0.5px solid ${activity===a.value?'rgba(59,130,246,0.30)':'rgba(255,255,255,0.85)'}`, borderRadius:12, padding:'11px 14px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', transition:'all 0.2s' }}>
+                      <span style={{ fontSize:13, fontWeight:500, color:activity===a.value?'#3b82f6':'#1e293b' }}>{a.label}</span>
+                      <span style={{ fontSize:11, color:'#94a3b8' }}>{a.sub}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:12, color:'#64748b', display:'block', marginBottom:10, fontWeight:500 }}>Diet type</label>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                  {(['Vegetarian','Non-vegetarian','Mixed','Navratri fast','Ramadan','Ekadashi fast'] as DietType[]).map(d => (
+                    <div key={d} onClick={() => setDietType(d)}
+                      style={{ background:dietType===d?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.55)', backdropFilter:'blur(12px)', border:`0.5px solid ${dietType===d?'rgba(59,130,246,0.30)':'rgba(255,255,255,0.85)'}`, borderRadius:12, padding:'10px 8px', cursor:'pointer', textAlign:'center', transition:'all 0.2s' }}>
+                      <div style={{ fontSize:18, marginBottom:4 }}>{d==='Vegetarian'?'🥗':d==='Non-vegetarian'?'🍗':d==='Navratri fast'?'🪔':d==='Ramadan'?'🌙':d==='Ekadashi fast'?'✨':'🔀'}</div>
+                      <div style={{ fontSize:11, fontWeight:500, color:dietType===d?'#3b82f6':'#475569' }}>{d==='Non-vegetarian'?'Non-veg':d==='Navratri fast'?'Navratri':d==='Ekadashi fast'?'Ekadashi':d}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {dietType==='Mixed' && (
+                <div style={{ marginBottom:20 }}>
+                  <label style={{ fontSize:12, color:fieldErrors.nonVegDays?'#ef4444':'#64748b', display:'block', marginBottom:10, fontWeight:500 }}>Which days are non-veg?</label>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {DAYS.map(d => (
+                      <div key={d} onClick={() => toggleDay(d)}
+                        style={{ padding:'6px 14px', borderRadius:20, cursor:'pointer', fontSize:12, fontWeight:500, background:nonVegDays.includes(d)?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.60)', border:`0.5px solid ${nonVegDays.includes(d)?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.9)'}`, color:nonVegDays.includes(d)?'#3b82f6':'#64748b', transition:'all 0.2s' }}>
+                        {d.slice(0,3)}
+                      </div>
+                    ))}
+                  </div>
+                  <FE k="nonVegDays"/>
+                </div>
+              )}
+              <div style={{ display:'flex', gap:10 }}>
+                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setStep(3); setFieldErrors({}) }}>Back</button>
+                <button style={{ ...G.btn, flex:2 }} onClick={tryAnalyze}>Analyze my body →</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ANALYZING */}
+      {screen==='analyzing' && (
+        <div style={{ maxWidth:480, margin:'0 auto', padding:'80px 20px', textAlign:'center' }}>
+          <div style={{ ...G.glass, padding:'40px 24px' }}>
+            <div style={{ width:48, height:48, border:'2px solid rgba(59,130,246,0.15)', borderTopColor:'#3b82f6', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 20px' }}/>
+            <h3 style={{ fontSize:18, fontWeight:500, color:'#1e293b', marginBottom:8 }}>Analyzing your body...</h3>
+            <p style={{ fontSize:13, color:'#94a3b8', marginBottom:20 }}>{analyzeMsg}</p>
+            <div style={{ display:'flex', justifyContent:'center', gap:6 }}>
+              {[0,1,2,3].map(i => (
+                <div key={i} style={{ width:6, height:6, borderRadius:'50%', background:analyzeStep===i?'#3b82f6':'rgba(59,130,246,0.20)', transition:'background 0.3s' }}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESULTS */}
+      {screen==='results' && apiData && (
+        <ResultsPage
+          results={apiData.results} aiInsights={apiData.aiInsights}
+          goal={goal} name={form.name} isPro={isPro} isLoggedIn={!!user}
+          onUpgrade={() => setShowUpgrade(true)} onLogin={() => setShowLogin(true)}
+          measurements={savedMeasurements}
+          onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
+        />
+      )}
+
+      {/* CHECKIN POPUP */}
+      {showCheckin && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
+          <div style={{ ...G.glass, padding:'32px 24px', maxWidth:380, width:'100%', textAlign:'center' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>📊</div>
+            <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:8 }}>WEEKLY CHECK-IN</div>
+            <h2 style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:8 }}>Time to check in{form.name?`, ${form.name.split(' ')[0]}`:''}!</h2>
+            <p style={{ fontSize:13, color:'#64748b', lineHeight:1.6, marginBottom:24 }}>Track your progress with a quick 2-minute measurement update.</p>
+            <a href="/checkin" style={{ display:'block', background:'#3b82f6', borderRadius:12, padding:'13px 0', fontSize:14, fontWeight:600, color:'white', textDecoration:'none', marginBottom:10, boxShadow:'0 4px 16px rgba(59,130,246,0.30)' }}>Start check-in →</a>
+            <button onClick={() => setShowCheckin(false)} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:13, cursor:'pointer' }}>Remind me later</button>
+          </div>
+        </div>
+      )}
+
+      {/* LOGIN MODAL */}
+      {showLogin && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
+          <div style={{ ...G.glass, padding:'28px 24px', maxWidth:360, width:'100%' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+              <div>
+                <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.06em', marginBottom:4 }}>{loginStep==='email'?'LOGIN':'VERIFY EMAIL'}</div>
+                <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>{loginStep==='email'?'Welcome back':'Check your email'}</h2>
+                <p style={{ fontSize:13, color:'#64748b' }}>{loginStep==='email'?'Login to view your progress history':`Code sent to ${loginEmail}`}</p>
+              </div>
+              <button onClick={() => { setShowLogin(false); setLoginStep('email'); setLoginError('') }} style={{ background:'none', border:'none', color:'#94a3b8', fontSize:22, cursor:'pointer', lineHeight:1 }}>×</button>
+            </div>
+            {loginStep==='email' ? (
+              <>
+                <input type="email" placeholder="you@example.com" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSendOTP()} style={{ marginBottom:10 }}/>
+                {loginError && <div style={{ fontSize:12, color:'#ef4444', marginBottom:8 }}>{loginError}</div>}
+                <button onClick={handleSendOTP} disabled={loginLoading} style={{ ...G.btn, width:'100%' }}>{loginLoading?'Sending...':'Send code'}</button>
+              </>
+            ) : (
+              <>
+                <input type="text" inputMode="numeric" placeholder="123456" value={loginOtp} onChange={e=>setLoginOtp(e.target.value.replace(/\D/g,'').slice(0,6))} onKeyDown={e=>e.key==='Enter'&&handleVerifyOTP()} style={{ fontSize:22, letterSpacing:8, textAlign:'center', marginBottom:10 }}/>
+                {loginError && <div style={{ fontSize:12, color:'#ef4444', marginBottom:8 }}>{loginError}</div>}
+                <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ ...G.btn, width:'100%', marginBottom:8 }}>{loginLoading?'Verifying...':'Verify & login'}</button>
+                <button onClick={() => { setLoginStep('email'); setLoginOtp(''); setLoginError('') }} style={{ width:'100%', background:'none', border:'none', color:'#94a3b8', fontSize:12, cursor:'pointer' }}>Use different email</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* UPGRADE MODAL */}
+      {showUpgrade && (
+        <UpgradeModal onClose={() => setShowUpgrade(false)} identifier={userIp} freeLeft={freeLeft} currentCredits={credits}
+          onSuccess={(newCredits) => {
+            setCredits(newCredits); setIsPro(newCredits>0); setShowUpgrade(false)
+            const wasBlocked = blockedRef.current; blockedRef.current=false
+            void refreshUsage()
+            if (wasBlocked) setTimeout(() => void runAnalysis(), 300)
+          }}
+        />
+      )}
+
+      <style>{`
+        @keyframes spin  { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        .fade-up   { animation: fadeUp 0.45s ease both; }
+        .fade-up-2 { animation: fadeUp 0.45s ease 0.08s both; }
+      `}</style>
     </div>
   )
 }

@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
     const analysis      = JSON.parse(extractJSON(analysisText))
     const weeklyDietPlan = JSON.parse(extractJSON(dietText))
 
-    /
+
 
     const aiInsights = { ...analysis, weeklyDietPlan }
     return NextResponse.json({ results, aiInsights })

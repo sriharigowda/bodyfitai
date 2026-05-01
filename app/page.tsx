@@ -288,6 +288,8 @@ export default function Home() {
             <>
               {form.name && <span style={{ fontSize:12, color:'#475569', fontWeight:500 }}>{form.name.split(' ')[0]}</span>}
               <a href="/progress" style={{ fontSize:11, color:'#64748b', textDecoration:'none', padding:'4px 10px', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, background:'rgba(255,255,255,0.60)' }}>📊 Progress</a>
+              <a href="/meal-plan" style={{ fontSize:11, color:'#64748b', textDecoration:'none', padding:'4px 10px', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, background:'rgba(255,255,255,0.60)' }}>🍽️ Meal</a>
+              <a href="/workout-plan" style={{ fontSize:11, color:'#64748b', textDecoration:'none', padding:'4px 10px', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, background:'rgba(255,255,255,0.60)' }}>🏋️ Workout</a>
               <button onClick={handleSignOut} style={{ fontSize:11, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
             </>
           ) : (

@@ -306,7 +306,12 @@ export default function Home() {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {screen==='form' && <span style={{ fontSize:12, color:'#94a3b8' }}>Step {step} of 4</span>}
-          {screen==='results' && <button onClick={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null) }} style={{ fontSize:12, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Start over</button>}
+          <button style={{ ...G.btnGhost, flex:1 }} onClick={() => {
+            setScreen('home')
+            setFieldErrors({})
+            // Clear guest name when going back — don't show welcome for guests
+            if (!user) setForm(defaultForm)
+          }}>Back</button>
           {user ? (
             <>
               {form.name && <span style={{ fontSize:12, color:'#475569', fontWeight:500 }}>{form.name.split(' ')[0]}</span>}
@@ -342,7 +347,7 @@ export default function Home() {
       {screen==='home' && (
         <div style={{ maxWidth:480, margin:'0 auto', padding:'40px 20px' }}>
           <div className="fade-up" style={{ textAlign:'center', marginBottom:40 }}>
-            {form.name && (
+            {user && form.name && (
               <div style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:10, letterSpacing:'-0.3px' }}>
                 Welcome, <span style={{ color:'#3b82f6' }}>{form.name.split(' ')[0]}</span>! 👋
               </div>
@@ -518,7 +523,12 @@ export default function Home() {
               </div>
 
               <div style={{ display:'flex', gap:10 }}>
-                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setScreen('home'); setFieldErrors({}) }}>Back</button>
+                <button style={{ ...G.btnGhost, flex:1 }} onClick={() => {
+                  setScreen('home')
+                  setFieldErrors({})
+                  // Clear guest name when going back — don't show welcome for guests
+                  if (!user) setForm(defaultForm)
+                }}>Back</button>
                 <button style={{ ...G.btn, flex:2 }} onClick={() => tryNext(2)}>Continue →</button>
               </div>
             </div>

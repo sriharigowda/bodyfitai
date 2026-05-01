@@ -93,10 +93,10 @@ function FeaturePayModal({ feature, onClose, onSuccess }: { feature: string; onC
           })
           const vData = await verify.json()
           if (vData.success) {
-            const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+            const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
             if (feature === 'bundle') paid.push('meal_plan', 'workout_plan', 'ai_insights')
             else paid.push(feature)
-            sessionStorage.setItem('bodyfitai_paid_features', JSON.stringify(Array.from(new Set(paid))))
+            localStorage.setItem('bodyfitai_paid_features', JSON.stringify(Array.from(new Set(paid))))
             onSuccess()
           } else {
             alert('Payment verification failed. Please contact support.')
@@ -148,10 +148,10 @@ export default function ResultsPage({ results: r, goal, name, onRestart, measure
 
   useEffect(() => {
     getUser().then(u => { if (u) getSavedAnalyses().then(d => setHasSaved(d.length > 0)).catch(() => {}) })
-    const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+    const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
     setPaidFeatures(paid)
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('bodyfitai_analysis', JSON.stringify({ results: r, measurements }))
+      localStorage.setItem('bodyfitai_analysis', JSON.stringify({ results: r, measurements }))
     }
   }, [])
 
@@ -166,20 +166,20 @@ export default function ResultsPage({ results: r, goal, name, onRestart, measure
 
   function handleFeatureClick(feature: string) {
     if (!isLoggedIn) { onLogin?.(); return }
-    if (paidFeatures.includes(feature)) {
-      if (feature === 'meal_plan')    window.location.href = '/meal-plan'
-      if (feature === 'workout_plan') window.location.href = '/workout-plan'
-      return
+    // Always navigate to the page — payment happens there
+    if (feature === 'meal_plan' || feature === 'bundle') {
+      window.location.href = '/meal-plan'
+    } else if (feature === 'workout_plan') {
+      window.location.href = '/workout-plan'
+    } else if (feature === 'ai_insights') {
+      window.location.href = '/meal-plan'
     }
-    setPayFeature(feature)
   }
 
   function handlePaySuccess() {
-    const paid = JSON.parse(sessionStorage.getItem('bodyfitai_paid_features') || '[]')
+    const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
     setPaidFeatures(Array.from(new Set(paid)) as string[])
     setPayFeature(null)
-    if (payFeature === 'meal_plan' || payFeature === 'bundle') window.location.href = '/meal-plan'
-    else if (payFeature === 'workout_plan') window.location.href = '/workout-plan'
   }
 
   // Body fat color

@@ -80,7 +80,12 @@ export default function Home() {
           if (cancelled) return
 
           if (profile?.name) {
-            setForm(f => ({ ...f, name: profile.name }))
+            setForm(f => ({
+              ...f,
+              name:   profile.name,
+              age:    profile.age    ? String(profile.age)    : f.age,
+              gender: profile.gender ? profile.gender          : f.gender,
+            }))
           } else {
             const saved = localStorage.getItem('bodyfitai_user_name')
             if (saved) setForm(f => ({ ...f, name: saved }))
@@ -144,7 +149,17 @@ export default function Home() {
         window.location.replace('/onboarding')
         return
       }
-      setForm(f => ({ ...f, name: profile.name }))
+
+  // Clear any guest name from localStorage — use Supabase profile only
+  localStorage.removeItem('bodyfitai_user_name')
+
+
+      setForm(f => ({
+          ...f,
+          name:   profile.name,
+          age:    profile.age    ? String(profile.age)    : f.age,
+          gender: profile.gender ? profile.gender          : f.gender,
+        }))
 
       const checkedIn = await hasCheckedInThisWeek().catch(() => false)
       if (!checkedIn) {
@@ -164,8 +179,9 @@ export default function Home() {
 
   async function handleSignOut() {
     await signOut()
+    localStorage.removeItem('bodyfitai_user_name')
     setUser(null); setCheckinDue(false); setShowCheckin(false)
-    setForm(f => ({ ...f, name: localStorage.getItem('bodyfitai_user_name') || '' }))
+    setForm(defaultForm)
   }
 
   // ── Form helpers ─────────────────────────────────────────────────────────────
@@ -197,14 +213,18 @@ export default function Home() {
     return Object.keys(e).length===0
   }
 
-  const tryNext = (n: number) => {
-    if (!validate(n-1)) return
-    if (n===2 && form.name.trim()) {
-      localStorage.setItem('bodyfitai_user_name', form.name.trim())
-      if (user) void saveProfile(form.name.trim())
-    }
-    setStep(n)
-  }
+ const tryNext = (n: number) => {
+   if (!validate(n-1)) return
+   if (n===2 && form.name.trim()) {
+     // Only save to localStorage for guests (logged-in users save via Supabase)
+     if (!user) localStorage.setItem('bodyfitai_user_name', form.name.trim())
+     if (user) void saveProfile(form.name.trim(), {
+       age:    form.age    ? +form.age    : undefined,
+       gender: form.gender ? form.gender  : undefined,
+     })
+   }
+   setStep(n)
+ }
 
   const tryAnalyze = () => {
     if (!validate(4)) return
@@ -219,7 +239,7 @@ export default function Home() {
   // ── Analysis ─────────────────────────────────────────────────────────────────
   async function runAnalysis() {
     setScreen('analyzing'); setAnalyzeStep(0)
-    const msgs = ['Calculating body fat...','Estimating BMR & TDEE...','Building macro plan...','Almost done...']
+    const msgs = ['Calculating body fat...','Estimating BMR & TDEE...','Building macro plan...','Generating AI insights...']
     let i=0; setAnalyzeMsg(msgs[0])
     const iv = setInterval(() => { i++; if (i<msgs.length) { setAnalyzeMsg(msgs[i]); setAnalyzeStep(i) } }, 900)
     try {
@@ -242,7 +262,10 @@ export default function Home() {
       setSavedMeasurements(measurements)
       if (measurements.name) {
         localStorage.setItem('bodyfitai_user_name', measurements.name)
-        if (user) void saveProfile(measurements.name)
+        if (user) void saveProfile(measurements.name, {
+          age:    measurements.age,
+          gender: measurements.gender,
+        })
       }
       const headers: Record<string,string> = { 'Content-Type': 'application/json' }
       const cu = await getUser(); if (cu?.id) headers['x-user-id'] = cu.id
@@ -377,7 +400,9 @@ export default function Home() {
             <div className="fade-up">
               <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.08em', marginBottom:6 }}>STEP 1 OF 4</div>
               <h2 style={{ fontSize:20, fontWeight:500, color:'#1e293b', marginBottom:4 }}>Basic info</h2>
-              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>Tell us about yourself</p>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:20 }}>{user ? 'Tap ✏️ to edit your details' : 'Tell us about yourself'}</p>
+
+              {/* Unit toggle */}
               <div style={{ display:'flex', gap:8, marginBottom:20 }}>
                 {(['metric','imperial'] as Unit[]).map(ut => (
                   <button key={ut} onClick={() => setUnit(ut)} style={{ padding:'7px 16px', borderRadius:20, border:`0.5px solid ${unit===ut?'rgba(59,130,246,0.35)':'rgba(255,255,255,0.9)'}`, background:unit===ut?'rgba(59,130,246,0.10)':'rgba(255,255,255,0.60)', color:unit===ut?'#3b82f6':'#64748b', fontSize:12, cursor:'pointer', transition:'all 0.2s', fontWeight:unit===ut?500:400 }}>
@@ -385,36 +410,101 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+
+              {/* GUEST — show full form */}
               {!user && (
                 <div style={{ marginBottom:14 }}>
                   <label style={lbl('name')}>Full name *</label>
-                  <input placeholder="e.g. Srini Kumar" value={form.name} onChange={e=>setF('name',e.target.value)} style={{ border:eb('name'), background:ebg('name') }}/>
+                  <input placeholder="e.g. Agasthya Kumar" value={form.name} onChange={e=>setF('name',e.target.value)} style={{ border:eb('name'), background:ebg('name') }}/>
                   <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>Login to save your progress after analysis</div>
                   <FE k="name"/>
                 </div>
               )}
-              {user && form.name && (
-                <div style={{ ...G.glassB, padding:'12px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
-                  <span style={{ fontSize:20 }}>👋</span>
-                  <div>
-                    <div style={{ fontSize:11, color:'#3b82f6', fontWeight:500, letterSpacing:'0.05em' }}>ANALYZING FOR</div>
-                    <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>{form.name}</div>
+
+              {/* LOGGED IN — show display cards for name/age/gender */}
+              {user && (
+                <div style={{ marginBottom:16 }}>
+                  {/* Name card */}
+                  <div style={{ ...G.glass, padding:'12px 14px', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:10, color:'#94a3b8', letterSpacing:'0.05em', marginBottom:3 }}>NAME</div>
+                      {fieldErrors.name ? (
+                        <input type="text" value={form.name} onChange={e=>setF('name',e.target.value)} placeholder="Your name" style={{ fontSize:14, fontWeight:500, border:'0.5px solid #fca5a5', borderRadius:8, padding:'4px 8px', width:'100%', background:'rgba(254,202,202,0.2)' }}/>
+                      ) : (
+                        <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>{form.name || <span style={{ color:'#94a3b8' }}>Not set</span>}</div>
+                      )}
+                    </div>
+                    <button onClick={() => { setFieldErrors(p => ({...p, name: 'editing'})) }} style={{ width:28, height:28, borderRadius:8, border:'0.5px solid rgba(255,255,255,0.9)', background:'rgba(59,130,246,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, marginLeft:10 }}>
+                      <span style={{ fontSize:12 }}>✏️</span>
+                    </button>
+                  </div>
+
+                  {/* Age + Gender cards */}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {/* Age card */}
+                    <div style={{ ...G.glass, padding:'12px 14px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:10, color:'#94a3b8', letterSpacing:'0.05em', marginBottom:3 }}>AGE</div>
+                          {fieldErrors.age ? (
+                            <input type="text" inputMode="numeric" value={form.age} onChange={e=>setF('age',e.target.value)} placeholder="27" style={{ fontSize:14, fontWeight:500, border:'0.5px solid #fca5a5', borderRadius:8, padding:'4px 8px', width:'100%', background:'rgba(254,202,202,0.2)' }}/>
+                          ) : (
+                            <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>{form.age ? `${form.age} yrs` : <span style={{ color:'#94a3b8', fontSize:13 }}>Not set</span>}</div>
+                          )}
+                        </div>
+                        <button onClick={() => setFieldErrors(p => ({...p, age: 'editing'}))} style={{ width:26, height:26, borderRadius:8, border:'0.5px solid rgba(255,255,255,0.9)', background:'rgba(59,130,246,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, marginLeft:6 }}>
+                          <span style={{ fontSize:11 }}>✏️</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Gender card */}
+                    <div style={{ ...G.glass, padding:'12px 14px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:10, color:'#94a3b8', letterSpacing:'0.05em', marginBottom:3 }}>GENDER</div>
+                          {fieldErrors.gender ? (
+                            <select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{ fontSize:13, fontWeight:500, border:'0.5px solid #fca5a5', borderRadius:8, padding:'4px 6px', width:'100%', background:'rgba(254,202,202,0.2)' }}>
+                              <option value="">Select</option><option>Male</option><option>Female</option>
+                            </select>
+                          ) : (
+                            <div style={{ fontSize:15, fontWeight:500, color:'#1e293b' }}>{form.gender || <span style={{ color:'#94a3b8', fontSize:13 }}>Not set</span>}</div>
+                          )}
+                        </div>
+                        <button onClick={() => setFieldErrors(p => ({...p, gender: 'editing'}))} style={{ width:26, height:26, borderRadius:8, border:'0.5px solid rgba(255,255,255,0.9)', background:'rgba(59,130,246,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, marginLeft:6 }}>
+                          <span style={{ fontSize:11 }}>✏️</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
+
+              {/* Guest age + gender fields */}
+              {!user && (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                  <div>
+                    <label style={lbl('age')}>Age *</label>
+                    <input type="text" inputMode="numeric" placeholder="25" value={form.age} onChange={e=>setF('age',e.target.value)} style={{ border:eb('age'), background:ebg('age') }}/>
+                    <FE k="age"/>
+                  </div>
+                  <div>
+                    <label style={lbl('gender')}>Gender *</label>
+                    <select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{ border:eb('gender'), background:ebg('gender') }}>
+                      <option value="">Select</option><option>Male</option><option>Female</option>
+                    </select>
+                    <FE k="gender"/>
+                  </div>
+                </div>
+              )}
+
+              {/* Height + Weight — always inputs */}
+              {user && (
+                <div style={{ fontSize:11, color:'#94a3b8', fontWeight:500, letterSpacing:'0.06em', marginBottom:10, marginTop:4 }}>
+                  CURRENT MEASUREMENTS
+                </div>
+              )}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-                <div>
-                  <label style={lbl('age')}>Age *</label>
-                  <input type="text" inputMode="numeric" placeholder="25" value={form.age} onChange={e=>setF('age',e.target.value)} style={{ border:eb('age'), background:ebg('age') }}/>
-                  <FE k="age"/>
-                </div>
-                <div>
-                  <label style={lbl('gender')}>Gender *</label>
-                  <select value={form.gender} onChange={e=>setF('gender',e.target.value)} style={{ border:eb('gender'), background:ebg('gender') }}>
-                    <option value="">Select</option><option>Male</option><option>Female</option>
-                  </select>
-                  <FE k="gender"/>
-                </div>
                 <div>
                   <label style={lbl('height')}>{uh} *</label>
                   <input type="text" inputMode="decimal" placeholder={unit==='metric'?'175':'69'} value={form.height} onChange={e=>setF('height',e.target.value)} style={{ border:eb('height'), background:ebg('height') }}/>
@@ -426,6 +516,7 @@ export default function Home() {
                   <FE k="weight"/>
                 </div>
               </div>
+
               <div style={{ display:'flex', gap:10 }}>
                 <button style={{ ...G.btnGhost, flex:1 }} onClick={() => { setScreen('home'); setFieldErrors({}) }}>Back</button>
                 <button style={{ ...G.btn, flex:2 }} onClick={() => tryNext(2)}>Continue →</button>
@@ -579,8 +670,8 @@ export default function Home() {
       {screen==='results' && apiData && (
         <ResultsPage
           results={apiData.results}
-          goal={goal} name={form.name} isLoggedIn={!!user}
-          onLogin={() => setShowLogin(true)}
+          goal={goal} name={form.name} isPro={true} isLoggedIn={!!user}
+          onUpgrade={() => {}} onLogin={() => setShowLogin(true)}
           measurements={savedMeasurements}
           onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
         />

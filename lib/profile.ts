@@ -1,37 +1,47 @@
 import { supabase } from './supabase'
 
-export async function getProfile(): Promise<{ name: string } | null> {
-    try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return null
-
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', user.id)
-            .single()
-
-        if (error || !data) return null
-        return { name: data.name ?? '' }
-    } catch { return null }
+export interface Profile {
+  name:   string
+  age?:   number
+  gender?: string
 }
 
-export async function saveProfile(name: string): Promise<void> {
-    try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+export async function getProfile(): Promise<Profile | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('name, age, gender')
+      .eq('user_id', user.id)
+      .single()
+    if (error) return null
+    return data
+  } catch { return null }
+}
 
-        await supabase
-            .from('profiles')
-            .upsert({ id: user.id, name, updated_at: new Date().toISOString() })
-    } catch {}
+export async function saveProfile(
+  name: string,
+  extras?: { age?: number; gender?: string }
+) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('profiles').upsert({
+      user_id: user.id,
+      name:    name.trim(),
+      ...(extras?.age    ? { age:    extras.age    } : {}),
+      ...(extras?.gender ? { gender: extras.gender } : {}),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  } catch (e) {
+    console.error('saveProfile error:', e)
+  }
 }
 
 export async function needsOnboarding(): Promise<boolean> {
-    try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return false
-        const profile = await getProfile()
-        return !profile?.name
-    } catch { return false }
+  try {
+    const profile = await getProfile()
+    return !profile?.name
+  } catch { return true }
 }

@@ -5,29 +5,27 @@ import { createClient } from '@supabase/supabase-js'
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new Error('Missing Supabase admin credentials — add SUPABASE_SERVICE_ROLE_KEY to .env.local')
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+           || process.env.SUPABASE_SERVICE_KEY
+  if (!url || !key) {
+    throw new Error('Missing Supabase admin credentials — add SUPABASE_SERVICE_ROLE_KEY to Vercel env vars')
+  }
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const admin   = getAdminClient()
-    const { searchParams } = new URL(req.url)
-    const action  = searchParams.get('action') || 'all'
-
-    if (action === 'users') {
-      const { data: { users }, error } = await admin.auth.admin.listUsers({ perPage: 500 })
-      if (error) throw error
-      return NextResponse.json({ users })
-    }
+    const admin  = getAdminClient()
+    const action = new URL(req.url).searchParams.get('action') || 'all'
 
     if (action === 'all') {
       const [
-        { data: { users } },
-        { data: profiles },
-        { data: analyses },
-        { data: txns },
-        { data: adminUsers },
+        authResult,
+        profilesResult,
+        analysesResult,
+        txnsResult,
+        adminUsersResult,
       ] = await Promise.all([
         admin.auth.admin.listUsers({ perPage: 500 }),
         admin.from('profiles').select('*'),
@@ -36,10 +34,28 @@ export async function GET(req: NextRequest) {
         admin.from('admin_users').select('*'),
       ])
 
-      return NextResponse.json({ users, profiles, analyses, txns, adminUsers })
+      if (authResult.error) {
+        console.error('Auth error:', authResult.error)
+        return NextResponse.json({ error: `Auth error: ${authResult.error.message}` }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        users:      authResult.data.users || [],
+        profiles:   profilesResult.data   || [],
+        analyses:   analysesResult.data   || [],
+        txns:       txnsResult.data       || [],
+        adminUsers: adminUsersResult.data || [],
+        debug: {
+          userCount:    authResult.data.users?.length || 0,
+          profileCount: profilesResult.data?.length   || 0,
+          analysisCount:analysesResult.data?.length   || 0,
+          txnCount:     txnsResult.data?.length       || 0,
+        }
+      })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error('Admin API error:', msg)
@@ -57,14 +73,13 @@ export async function POST(req: NextRequest) {
       const { email, role } = body
       const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 500 })
       const user = users.find((u: any) => u.email === email)
-      if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      if (!user) return NextResponse.json({ error: 'User not found with that email' }, { status: 404 })
       await admin.from('admin_users').upsert({ user_id: user.id, role })
       return NextResponse.json({ success: true })
     }
 
     if (action === 'remove_admin') {
-      const { userId } = body
-      await admin.from('admin_users').delete().eq('user_id', userId)
+      await admin.from('admin_users').delete().eq('user_id', body.userId)
       return NextResponse.json({ success: true })
     }
 
@@ -75,6 +90,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     return NextResponse.json({ error: msg }, { status: 500 })

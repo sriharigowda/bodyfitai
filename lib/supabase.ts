@@ -39,6 +39,14 @@ export const supabase = {
   from: (table: string) => getSupabase().from(table),
 }
 
-export const supabaseAdmin = {
-  from: (table: string) => getSupabaseAdmin().from(table),
-}
+// Admin client — uses SERVICE ROLE key (not anon key)
+export const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,  // ← this is the key change
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
+  }
+)

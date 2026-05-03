@@ -403,10 +403,11 @@ export default function AdminPage() {
   const [newAdminRole,  setNewAdminRole]  = useState('admin')
   const [metrics,     setMetrics]     = useState({ users:0, revenue:0, cost:0, analyses:0 })
 
-  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'bodyfitai2024admin'
-
   async function handleLogin() {
-    if (password !== ADMIN_PASSWORD) { setPwError('Incorrect password'); return }
+    const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'bodyfitai2024admin'
+    console.log('Expected password:', ADMIN_PASSWORD)  // check browser console
+    console.log('Entered password:', password)
+    if (password.trim() !== ADMIN_PASSWORD.trim()) { setPwError('Incorrect password'); return }
     setAuthed(true)
     loadData()
   }
@@ -415,7 +416,8 @@ export default function AdminPage() {
     setLoading(true)
     try {
       // Load users with profile data
-      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
+      const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers()
+      if (authError) { console.error('Auth admin error:', authError); return }
       const { data: profiles }  = await supabaseAdmin.from('profiles').select('*')
       const { data: analyses }  = await supabaseAdmin.from('user_analyses').select('user_id, slot1_measurements, slot1_body_fat, slot1_lean_mass, slot1_ffmi, slot1_bmr, slot1_calories')
       const { data: txns }      = await supabaseAdmin.from('ai_transactions').select('*').order('created_at', { ascending:false })

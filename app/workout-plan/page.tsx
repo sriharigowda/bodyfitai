@@ -30,7 +30,6 @@ function PayModal({ userId, onClose, onSuccess }: { userId: string; onClose: () 
         key: data.key, amount: data.amount, currency: 'INR',
         name: 'BodyFitAI', description: 'Workout Plan', order_id: data.orderId,
         handler: async (response: any) => {
-          // Pass user ID so transaction is linked to user
           const verify = await fetch('/api/payment/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
@@ -99,10 +98,22 @@ export default function WorkoutPlanPage() {
       const u = await getUser()
       if (!u) { window.location.href = '/'; return }
       setUserId(u.id)
+
       const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
       setHasPaid(paid.includes('workout_plan') || paid.includes('bundle'))
+
       const stored = localStorage.getItem('bodyfitai_analysis')
       if (stored) setAnalysisData(JSON.parse(stored))
+
+      // ── Load saved plan from localStorage so it survives navigation ──
+      const savedPlan = localStorage.getItem('bodyfitai_workout_plan')
+      if (savedPlan) {
+        try {
+          const p = JSON.parse(savedPlan)
+          if (p.plan) setPlan(p.plan)
+        } catch { localStorage.removeItem('bodyfitai_workout_plan') }
+      }
+
       setAuthChecked(true)
     }
     init()
@@ -116,7 +127,6 @@ export default function WorkoutPlanPage() {
     if (!analysisData) return
     setLoading(true); setError('')
     try {
-      // Pass user ID so plan gets saved to ai_transactions
       const res = await fetch('/api/workout-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
@@ -136,8 +146,12 @@ export default function WorkoutPlanPage() {
       })
       const data = await res.json()
       if (data.error) { setError(data.error); setLoading(false); return }
+
       setPlan(data.plan)
       setActiveDay(0)
+
+      // ── Persist to localStorage so plan survives navigation ──
+      localStorage.setItem('bodyfitai_workout_plan', JSON.stringify({ plan: data.plan }))
     } catch {
       setError('Failed to generate workout plan. Please try again.')
     }
@@ -158,7 +172,6 @@ export default function WorkoutPlanPage() {
       <div style={{ position:'fixed', top:-120, left:-120, width:400, height:400, background:'radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
       <div style={{ position:'fixed', bottom:-80, right:-80, width:320, height:320, background:'radial-gradient(circle,rgba(99,179,246,0.08) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
 
-      {/* Nav */}
       <nav style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'13px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10 }}>
         <a href="/" style={{ fontSize:18, fontWeight:500, color:'#1e293b', textDecoration:'none' }}>BodyFit<span style={{ color:'#3b82f6' }}>AI</span></a>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -203,6 +216,7 @@ export default function WorkoutPlanPage() {
               Do body analysis first →
             </a>
           </div>
+
         ) : !hasPaid ? (
           <div style={{ textAlign:'center', padding:'20px 0' }}>
             <div style={{ ...G.glassB, padding:20, marginBottom:24, textAlign:'left' }}>
@@ -241,6 +255,7 @@ export default function WorkoutPlanPage() {
               </button>
             </div>
           </div>
+
         ) : (
           <>
             <div style={{ ...G.glassB, padding:20, marginBottom:20 }}>
@@ -388,7 +403,11 @@ export default function WorkoutPlanPage() {
                   </>
                 )}
 
-                <button onClick={generatePlan}
+                <button onClick={() => {
+                  localStorage.removeItem('bodyfitai_workout_plan')
+                  setPlan(null)
+                  generatePlan()
+                }}
                   style={{ width:'100%', marginTop:16, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:12, padding:'12px 0', color:'#3b82f6', fontSize:14, fontWeight:500, cursor:'pointer' }}>
                   🔄 Regenerate plan — free
                 </button>

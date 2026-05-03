@@ -33,7 +33,6 @@ const TAG_STYLES: Record<string, { bg: string; color: string; label: string }> =
 
 const GYM_TIMES = ['5:00 AM','6:00 AM','7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM']
 
-// Payment modal
 function PayModal({ userId, onClose, onSuccess }: { userId: string; onClose: () => void; onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
 
@@ -52,7 +51,6 @@ function PayModal({ userId, onClose, onSuccess }: { userId: string; onClose: () 
         key: data.key, amount: data.amount, currency: 'INR',
         name: 'BodyFitAI', description: 'Detailed Meal Plan', order_id: data.orderId,
         handler: async (response: any) => {
-          // Pass user ID so transaction is linked to user
           const verify = await fetch('/api/payment/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
@@ -136,6 +134,20 @@ export default function MealPlanPage() {
         const diet = data.measurements?.diet?.type || 'Non-vegetarian'
         setActiveTab(diet === 'Vegetarian' ? 'veg' : 'nonveg')
       }
+
+      // ── Load saved plan from localStorage so it survives navigation ──
+      const savedPlan = localStorage.getItem('bodyfitai_meal_plan')
+      if (savedPlan) {
+        try {
+          const p = JSON.parse(savedPlan)
+          if (p.nonvegPlan)   setNonvegPlan(p.nonvegPlan)
+          if (p.vegPlan)      setVegPlan(p.vegPlan)
+          if (p.supplements)  setSupplements(p.supplements)
+          if (p.gymTime)      setGymTime(p.gymTime)
+          setGenerated(true)
+        } catch { localStorage.removeItem('bodyfitai_meal_plan') }
+      }
+
       setAuthChecked(true)
     }
     init()
@@ -154,7 +166,6 @@ export default function MealPlanPage() {
     if (!analysisData) return
     setLoading(true); setError('')
     try {
-      // Pass user ID so plan gets saved to ai_transactions
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
@@ -174,12 +185,21 @@ export default function MealPlanPage() {
       })
       const data = await res.json()
       if (data.error) { setError(data.error); setLoading(false); return }
+
       setNonvegPlan(data.nonvegPlan)
       setVegPlan(data.vegPlan)
       setSupplements(data.supplements || [])
       setGenerated(true)
       if (data.vegPlan && !data.nonvegPlan) setActiveTab('veg')
       else setActiveTab('nonveg')
+
+      // ── Persist to localStorage so plan survives navigation ──
+      localStorage.setItem('bodyfitai_meal_plan', JSON.stringify({
+        nonvegPlan:  data.nonvegPlan,
+        vegPlan:     data.vegPlan,
+        supplements: data.supplements,
+        gymTime,
+      }))
     } catch {
       setError('Failed to generate plan. Please try again.')
     }
@@ -205,7 +225,6 @@ export default function MealPlanPage() {
       <div style={{ position:'fixed', top:-120, left:-120, width:400, height:400, background:'radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
       <div style={{ position:'fixed', bottom:-80, right:-80, width:320, height:320, background:'radial-gradient(circle,rgba(99,179,246,0.08) 0%,transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }}/>
 
-      {/* Nav */}
       <nav style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'13px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:10 }}>
         <a href="/" style={{ fontSize:18, fontWeight:500, color:'#1e293b', textDecoration:'none' }}>BodyFit<span style={{ color:'#3b82f6' }}>AI</span></a>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -251,6 +270,7 @@ export default function MealPlanPage() {
               Do body analysis first →
             </a>
           </div>
+
         ) : !hasPaid ? (
           <div style={{ textAlign:'center', padding:'20px 0' }}>
             <div style={{ ...G.glassB, padding:20, marginBottom:24, textAlign:'left' }}>
@@ -290,6 +310,7 @@ export default function MealPlanPage() {
               </button>
             </div>
           </div>
+
         ) : (
           <>
             <div style={{ ...G.glassB, padding:20, marginBottom:20 }}>
@@ -311,12 +332,19 @@ export default function MealPlanPage() {
               </div>
             </div>
 
+            {/* Gym time */}
             <div style={{ ...G.glass, padding:16, marginBottom:16, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
               <div>
                 <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>🏋️ Your gym time</div>
                 <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>Meal timings adjust automatically</div>
               </div>
-              <select value={gymTime} onChange={e => { setGymTime(e.target.value); setGenerated(false); setNonvegPlan(null); setVegPlan(null) }}
+              <select value={gymTime} onChange={e => {
+                setGymTime(e.target.value)
+                setGenerated(false)
+                setNonvegPlan(null)
+                setVegPlan(null)
+                localStorage.removeItem('bodyfitai_meal_plan')
+              }}
                 style={{ background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.25)', borderRadius:10, padding:'8px 14px', fontSize:13, color:'#3b82f6', fontWeight:500, outline:'none', cursor:'pointer' }}>
                 {GYM_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -462,7 +490,13 @@ export default function MealPlanPage() {
                       </div>
                     </div>
 
-                    <button onClick={generatePlan}
+                    <button onClick={() => {
+                      localStorage.removeItem('bodyfitai_meal_plan')
+                      setGenerated(false)
+                      setNonvegPlan(null)
+                      setVegPlan(null)
+                      generatePlan()
+                    }}
                       style={{ width:'100%', marginTop:16, background:'rgba(59,130,246,0.08)', border:'0.5px solid rgba(59,130,246,0.22)', borderRadius:12, padding:'12px 0', color:'#3b82f6', fontSize:14, fontWeight:500, cursor:'pointer' }}>
                       🔄 Regenerate plan — free
                     </button>

@@ -18,14 +18,7 @@ export async function GET(req: NextRequest) {
       const [authResult, profilesResult, analysesResult, txnsResult, adminUsersResult] = await Promise.all([
         admin.auth.admin.listUsers({ perPage: 500 }),
         admin.from('profiles').select('*'),
-        admin.from('user_analyses').select(
-          'user_id, slot, goal, weight, height, age, gender, ' +
-          'neck, chest, stomach, hip, thigh, waist, bicep, forearm, wrist, knee, calf, ankle, around_shoulder, ' +
-          'body_fat_percent, lean_mass, fat_mass, ffmi, ffmi_category, body_fat_category, ' +
-          'bmr, tdee, daily_calories, protein, carbs, fat, fiber, ' +
-          'weeks_to_goal, target_body_fat, target_lean_mass, target_ffmi, ' +
-          'created_at'
-        ).order('created_at', { ascending: false }),
+        admin.from('user_analyses').select('*').order('created_at', { ascending: false }),
         admin.from('ai_transactions').select('*').order('created_at', { ascending: false }),
         admin.from('admin_users').select('*'),
       ])

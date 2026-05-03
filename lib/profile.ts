@@ -28,7 +28,8 @@ export async function saveProfile(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from('profiles').upsert({
-      user_id: user.id,
+      id:      user.id,   // ← id = auth user UUID
+      user_id: user.id,   // ← user_id = same UUID
       name:    name.trim(),
       ...(extras?.age    ? { age:    extras.age    } : {}),
       ...(extras?.gender ? { gender: extras.gender } : {}),

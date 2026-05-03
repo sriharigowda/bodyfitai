@@ -680,8 +680,8 @@ export default function Home() {
       {screen==='results' && apiData && (
         <ResultsPage
           results={apiData.results}
-          goal={goal} name={form.name} isPro={true} isLoggedIn={!!user}
-          onUpgrade={() => {}} onLogin={() => setShowLogin(true)}
+          goal={goal} name={form.name} isLoggedIn={!!user}
+          onLogin={() => setShowLogin(true)}
           measurements={savedMeasurements}
           onRestart={() => { setScreen('home'); setStep(1); setForm(defaultForm); setApiData(null); setSavedMeasurements(null) }}
         />

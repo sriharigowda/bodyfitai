@@ -34,7 +34,7 @@ const TAG_STYLES: Record<string, { bg: string; color: string; label: string }> =
 const GYM_TIMES = ['5:00 AM','6:00 AM','7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM']
 
 // Payment modal
-function PayModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function PayModal({ userId, onClose, onSuccess }: { userId: string; onClose: () => void; onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
 
   async function handlePay() {
@@ -52,8 +52,10 @@ function PayModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () =
         key: data.key, amount: data.amount, currency: 'INR',
         name: 'BodyFitAI', description: 'Detailed Meal Plan', order_id: data.orderId,
         handler: async (response: any) => {
+          // Pass user ID so transaction is linked to user
           const verify = await fetch('/api/payment/verify', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
             body: JSON.stringify({ ...response, feature: 'meal_plan' }),
           })
           const vData = await verify.json()
@@ -116,19 +118,17 @@ export default function MealPlanPage() {
   const [hasPaid,      setHasPaid]      = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
   const [authChecked,  setAuthChecked]  = useState(false)
-  const [isLoggedIn,   setIsLoggedIn]   = useState(false)
+  const [userId,       setUserId]       = useState('')
 
   useEffect(() => {
     async function init() {
       const u = await getUser()
-      setIsLoggedIn(!!u)
       if (!u) { window.location.href = '/'; return }
+      setUserId(u.id)
 
-      // Check paid features from localStorage
       const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
       setHasPaid(paid.includes('meal_plan') || paid.includes('bundle'))
 
-      // Load analysis from localStorage (persistent)
       const stored = localStorage.getItem('bodyfitai_analysis')
       if (stored) {
         const data = JSON.parse(stored)
@@ -154,9 +154,10 @@ export default function MealPlanPage() {
     if (!analysisData) return
     setLoading(true); setError('')
     try {
+      // Pass user ID so plan gets saved to ai_transactions
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
         body: JSON.stringify({
           name:          m?.name     || 'User',
           goal:          m?.goal     || 'Recomp',
@@ -251,9 +252,7 @@ export default function MealPlanPage() {
             </a>
           </div>
         ) : !hasPaid ? (
-          /* Has analysis but not paid */
           <div style={{ textAlign:'center', padding:'20px 0' }}>
-            {/* Header */}
             <div style={{ ...G.glassB, padding:20, marginBottom:24, textAlign:'left' }}>
               <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.07em', marginBottom:6 }}>YOUR MEAL PLAN</div>
               <div style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:4 }}>{firstName}'s {modeLabel} Plan 🍽️</div>
@@ -272,8 +271,6 @@ export default function MealPlanPage() {
                 ))}
               </div>
             </div>
-
-            {/* Pay card */}
             <div style={{ ...G.glass, padding:'28px 20px', marginBottom:16 }}>
               <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
               <div style={{ fontSize:18, fontWeight:600, color:'#1e293b', marginBottom:8 }}>Unlock your meal plan</div>
@@ -294,9 +291,7 @@ export default function MealPlanPage() {
             </div>
           </div>
         ) : (
-          /* Has analysis AND paid */
           <>
-            {/* Header */}
             <div style={{ ...G.glassB, padding:20, marginBottom:20 }}>
               <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.07em', marginBottom:6 }}>YOUR MEAL PLAN</div>
               <div style={{ fontSize:22, fontWeight:500, color:'#1e293b', marginBottom:4 }}>{firstName}'s {modeLabel} Plan 🍽️</div>
@@ -316,7 +311,6 @@ export default function MealPlanPage() {
               </div>
             </div>
 
-            {/* Gym time */}
             <div style={{ ...G.glass, padding:16, marginBottom:16, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
               <div>
                 <div style={{ fontSize:13, fontWeight:500, color:'#1e293b' }}>🏋️ Your gym time</div>
@@ -328,14 +322,12 @@ export default function MealPlanPage() {
               </select>
             </div>
 
-            {/* Generate button */}
             {!generated && !loading && (
               <button onClick={generatePlan} style={{ ...G.btn, width:'100%', marginBottom:20, fontSize:15 }}>
                 Generate my meal plan →
               </button>
             )}
 
-            {/* Loading */}
             {loading && (
               <div style={{ ...G.glass, padding:'40px 24px', textAlign:'center', marginBottom:20 }}>
                 <div style={{ width:44, height:44, border:'2px solid rgba(59,130,246,0.15)', borderTopColor:'#3b82f6', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 16px' }}/>
@@ -344,7 +336,6 @@ export default function MealPlanPage() {
               </div>
             )}
 
-            {/* Error */}
             {error && (
               <div style={{ background:'rgba(254,202,202,0.5)', border:'0.5px solid #fca5a5', borderRadius:12, padding:'12px 16px', marginBottom:16, fontSize:13, color:'#dc2626' }}>
                 {error}
@@ -352,10 +343,8 @@ export default function MealPlanPage() {
               </div>
             )}
 
-            {/* Generated plan */}
             {generated && (nonvegPlan || vegPlan) && (
               <>
-                {/* Veg/Non-veg toggle */}
                 {hasBothPlans && (
                   <div style={{ display:'flex', gap:8, marginBottom:20 }}>
                     {nonvegPlan && (
@@ -379,7 +368,6 @@ export default function MealPlanPage() {
                   </div>
                 )}
 
-                {/* Supplements */}
                 {supplements.length > 0 && (
                   <div style={{ ...G.glass, padding:16, marginBottom:20 }}>
                     <div style={{ fontSize:12, color:'#3b82f6', fontWeight:600, letterSpacing:'0.06em', marginBottom:10 }}>💊 DAILY SUPPLEMENTS</div>
@@ -396,7 +384,6 @@ export default function MealPlanPage() {
                   </div>
                 )}
 
-                {/* Meal timeline */}
                 {activePlan && (
                   <>
                     <div style={{ fontSize:11, color:'#94a3b8', fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase' as const, marginBottom:12 }}>
@@ -443,7 +430,6 @@ export default function MealPlanPage() {
                       )
                     })}
 
-                    {/* Totals */}
                     <div style={{ ...G.glass, overflow:'hidden', marginTop:20 }}>
                       <div style={{ padding:'12px 16px', background:'rgba(59,130,246,0.05)', borderBottom:'0.5px solid rgba(59,130,246,0.08)', fontSize:12, fontWeight:600, color:'#3b82f6', letterSpacing:'0.05em' }}>📊 DAILY TOTALS</div>
                       <div style={{ overflowX:'auto' }}>
@@ -488,7 +474,7 @@ export default function MealPlanPage() {
         )}
       </div>
 
-      {showPayModal && <PayModal onClose={() => setShowPayModal(false)} onSuccess={() => { setShowPayModal(false); setHasPaid(true) }}/>}
+      {showPayModal && <PayModal userId={userId} onClose={() => setShowPayModal(false)} onSuccess={() => { setShowPayModal(false); setHasPaid(true) }}/>}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )

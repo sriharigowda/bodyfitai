@@ -12,7 +12,7 @@ const G = {
   btn:    { background:'#3b82f6', border:'none', borderRadius:12, padding:'13px 0', color:'white', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 14px rgba(59,130,246,0.28)', transition:'all 0.15s' } as const,
 }
 
-function PayModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function PayModal({ userId, onClose, onSuccess }: { userId: string; onClose: () => void; onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
 
   async function handlePay() {
@@ -30,8 +30,10 @@ function PayModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () =
         key: data.key, amount: data.amount, currency: 'INR',
         name: 'BodyFitAI', description: 'Workout Plan', order_id: data.orderId,
         handler: async (response: any) => {
+          // Pass user ID so transaction is linked to user
           const verify = await fetch('/api/payment/verify', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
             body: JSON.stringify({ ...response, feature: 'workout_plan' }),
           })
           const vData = await verify.json()
@@ -90,11 +92,13 @@ export default function WorkoutPlanPage() {
   const [hasPaid,      setHasPaid]      = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
   const [authChecked,  setAuthChecked]  = useState(false)
+  const [userId,       setUserId]       = useState('')
 
   useEffect(() => {
     async function init() {
       const u = await getUser()
       if (!u) { window.location.href = '/'; return }
+      setUserId(u.id)
       const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
       setHasPaid(paid.includes('workout_plan') || paid.includes('bundle'))
       const stored = localStorage.getItem('bodyfitai_analysis')
@@ -112,8 +116,10 @@ export default function WorkoutPlanPage() {
     if (!analysisData) return
     setLoading(true); setError('')
     try {
+      // Pass user ID so plan gets saved to ai_transactions
       const res = await fetch('/api/workout-plan', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
         body: JSON.stringify({
           name:     m?.name     || 'User',
           goal:     m?.goal     || 'Muscle gain',
@@ -163,7 +169,6 @@ export default function WorkoutPlanPage() {
 
       <div style={{ maxWidth:600, margin:'0 auto', padding:'24px 16px 48px', position:'relative', zIndex:1 }}>
 
-        {/* No analysis — landing page */}
         {!analysisData ? (
           <div style={{ textAlign:'center', padding:'40px 0' }}>
             <div style={{ fontSize:64, marginBottom:20 }}>🏋️</div>
@@ -199,7 +204,6 @@ export default function WorkoutPlanPage() {
             </a>
           </div>
         ) : !hasPaid ? (
-          /* Has analysis but not paid */
           <div style={{ textAlign:'center', padding:'20px 0' }}>
             <div style={{ ...G.glassB, padding:20, marginBottom:24, textAlign:'left' }}>
               <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.07em', marginBottom:6 }}>YOUR WORKOUT PLAN</div>
@@ -238,7 +242,6 @@ export default function WorkoutPlanPage() {
             </div>
           </div>
         ) : (
-          /* Has analysis AND paid */
           <>
             <div style={{ ...G.glassB, padding:20, marginBottom:20 }}>
               <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.07em', marginBottom:6 }}>YOUR WORKOUT PLAN</div>
@@ -281,7 +284,6 @@ export default function WorkoutPlanPage() {
 
             {plan && (
               <>
-                {/* Day tabs */}
                 <div style={{ display:'flex', gap:6, marginBottom:16, overflowX:'auto', paddingBottom:4 }}>
                   {plan.days.map((day, i) => (
                     <button key={i} onClick={() => setActiveDay(i)}
@@ -396,7 +398,7 @@ export default function WorkoutPlanPage() {
         )}
       </div>
 
-      {showPayModal && <PayModal onClose={() => setShowPayModal(false)} onSuccess={() => { setShowPayModal(false); setHasPaid(true) }}/>}
+      {showPayModal && <PayModal userId={userId} onClose={() => setShowPayModal(false)} onSuccess={() => { setShowPayModal(false); setHasPaid(true) }}/>}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )

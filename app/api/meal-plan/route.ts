@@ -352,6 +352,26 @@ export async function POST(req: NextRequest) {
       { name: 'Ashwagandha KSM-66', timing: 'before bed', icon: '🌿' },
     ]
 
+    // Save plan to ai_transactions so admin portal can view it
+    const userId = req.headers.get('x-user-id')
+    if (userId) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js')
+        const admin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+        await admin.from('ai_transactions')
+          .update({ plan_data: { nonvegPlan, vegPlan, macros, times, gymTime, supplements } })
+          .eq('user_id', userId)
+          .in('feature', ['meal_plan', 'bundle'])
+          .is('plan_data', null)
+      } catch (e) {
+        console.log('Meal plan save error (non-critical):', e)
+      }
+    }
+
     return NextResponse.json({ nonvegPlan, vegPlan, macros, times, gymTime, supplements })
 
   } catch (error) {

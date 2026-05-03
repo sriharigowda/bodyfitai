@@ -160,6 +160,26 @@ export async function POST(req: NextRequest) {
     const prompt = buildWorkoutPrompt(body)
     const text   = USE_OPENAI ? await callOpenAI(prompt) : await callGroq(prompt)
     const plan   = JSON.parse(extractJSON(text))
+    // Save plan to ai_transactions so admin portal can view it
+    const userId = req.headers.get('x-user-id')
+    if (userId) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js')
+        const admin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+        await admin.from('ai_transactions')
+          .update({ plan_data: { plan } })
+          .eq('user_id', userId)
+          .in('feature', ['workout_plan', 'bundle'])
+          .is('plan_data', null)
+      } catch (e) {
+        console.log('Workout plan save error (non-critical):', e)
+      }
+    }
+
     return NextResponse.json({ plan })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)

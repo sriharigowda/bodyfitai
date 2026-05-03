@@ -406,7 +406,9 @@ export default function AdminPage() {
       const { users: authUsers=[], profiles=[], analyses=[], txns=[], adminUsers: admins=[] } = data
 
       const profileMap  = Object.fromEntries((profiles||[]).map((p:any) => [p.user_id, p]))
-      const analysisMap = Object.fromEntries((analyses||[]).map((a:any) => [a.user_id, a]))
+      // Group analyses by user_id — take latest (analyses are ordered by created_at desc)
+      const analysisMap: Record<string,any> = {}
+      ;(analyses||[]).forEach((a:any) => { if (!analysisMap[a.user_id]) analysisMap[a.user_id] = a })
       const txnMap: Record<string,any[]> = {}
       ;(txns||[]).forEach((t:any) => { if(!txnMap[t.user_id]) txnMap[t.user_id]=[]; txnMap[t.user_id].push(t) })
 
@@ -417,12 +419,20 @@ export default function AdminPage() {
         const mealTxn    = userTxns.find((t:any) => ['meal_plan','bundle'].includes(t.feature))
         const workoutTxn = userTxns.find((t:any) => ['workout_plan','bundle'].includes(t.feature))
         const totalSpent = userTxns.reduce((s:number,t:any) => s+(t.amount_inr||0), 0)
-        const meas       = analysis.slot1_measurements
+        // user_analyses uses flat columns (no slot1_ prefix)
+        // measurements are stored as individual columns
+        const meas = analysis.user_id ? {
+          neck: analysis.neck, aroundShoulder: analysis.around_shoulder,
+          chest: analysis.chest, bicep: analysis.bicep, forearm: analysis.forearm,
+          wrist: analysis.wrist, stomach: analysis.stomach, hip: analysis.hip,
+          thigh: analysis.thigh, knee: analysis.knee, calf: analysis.calf, ankle: analysis.ankle,
+        } : null
         return {
-          id: u.id, email: u.email, name: profile.name, age: profile.age, gender: profile.gender,
-          created_at: u.created_at, goal: meas?.goal, diet_type: meas?.diet?.type,
-          body_fat: analysis.slot1_body_fat, lean_mass: analysis.slot1_lean_mass,
-          ffmi: analysis.slot1_ffmi, bmr: analysis.slot1_bmr, calories: analysis.slot1_calories,
+          id: u.id, email: u.email, name: profile.name, age: profile.age || analysis.age, gender: profile.gender || analysis.gender,
+          created_at: u.created_at, goal: analysis.goal, diet_type: analysis.diet_type,
+          body_fat:  analysis.body_fat_percent, lean_mass: analysis.lean_mass,
+          ffmi:      analysis.ffmi,             bmr:       analysis.bmr,
+          calories:  analysis.daily_calories,
           measurements: meas, total_spent: totalSpent,
           analyses_count: analyses.filter((a:any)=>a.user_id===u.id).length,
           meal_plan: mealTxn?.plan_data, meal_plan_id: mealTxn?.id,

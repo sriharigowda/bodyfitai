@@ -174,7 +174,6 @@ export async function POST(req: NextRequest) {
           .update({ plan_data: { plan } })
           .eq('user_id', userId)
           .in('feature', ['workout_plan', 'bundle'])
-          .is('plan_data', null)
       } catch (e) {
         console.log('Workout plan save error (non-critical):', e)
       }

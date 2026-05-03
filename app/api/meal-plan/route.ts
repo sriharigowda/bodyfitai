@@ -366,7 +366,6 @@ export async function POST(req: NextRequest) {
           .update({ plan_data: { nonvegPlan, vegPlan, macros, times, gymTime, supplements } })
           .eq('user_id', userId)
           .in('feature', ['meal_plan', 'bundle'])
-          .is('plan_data', null)
       } catch (e) {
         console.log('Meal plan save error (non-critical):', e)
       }

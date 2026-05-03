@@ -362,13 +362,19 @@ export async function POST(req: NextRequest) {
           process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           { auth: { autoRefreshToken: false, persistSession: false } }
         )
-        await admin.from('ai_transactions')
-          .update({ plan_data: { nonvegPlan, vegPlan, macros, times, gymTime, supplements } })
+        const planData = { nonvegPlan, vegPlan, macros, times, gymTime, supplements }
+        const { data, error } = await admin.from('ai_transactions')
+          .update({ plan_data: planData })
           .eq('user_id', userId)
           .in('feature', ['meal_plan', 'bundle'])
+          .select()
+        if (error) console.error('Meal plan DB save error:', error.message, error.code)
+        else console.log('Meal plan saved to DB, rows:', data?.length)
       } catch (e) {
-        console.log('Meal plan save error (non-critical):', e)
+        console.error('Meal plan save exception:', e)
       }
+    } else {
+      console.log('No x-user-id header — plan not saved to DB')
     }
 
     return NextResponse.json({ nonvegPlan, vegPlan, macros, times, gymTime, supplements })

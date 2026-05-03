@@ -60,7 +60,7 @@ function PayModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () =
           if (vData.success) {
             const paid = JSON.parse(localStorage.getItem('bodyfitai_paid_features') || '[]')
             paid.push('meal_plan')
-            localStorage.setItem('bodyfitai_paid_features', JSON.stringify([...new Set(paid)]))
+            localStorage.setItem('bodyfitai_paid_features', JSON.stringify(Array.from(new Set(paid))))
             onSuccess()
           } else {
             alert('Payment verification failed. Please contact support.')

@@ -166,9 +166,10 @@ export default function MealPlanPage() {
     if (!analysisData) return
     setLoading(true); setError('')
     try {
+      const currentUser = await getUser()
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.id || userId },
         body: JSON.stringify({
           name:          m?.name     || 'User',
           goal:          m?.goal     || 'Recomp',

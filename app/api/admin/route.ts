@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
         admin.auth.admin.listUsers({ perPage: 500 }),
         admin.from('profiles').select('*'),
         admin.from('user_analyses').select('*').order('created_at', { ascending: false }),
-        admin.from('ai_transactions').select('*').order('created_at', { ascending: false }),
+        admin.from('ai_transactions').select('*').order('updated_at', { ascending: false }),
         admin.from('admin_users').select('*'),
       ])
 
@@ -31,13 +31,6 @@ export async function GET(req: NextRequest) {
         analyses:   analysesResult.data   || [],
         txns:       txnsResult.data       || [],
         adminUsers: adminUsersResult.data || [],
-        debug: {
-          userCount:     authResult.data.users?.length    || 0,
-          profileCount:  profilesResult.data?.length      || 0,
-          analysisCount: analysesResult.data?.length      || 0,
-          txnCount:      txnsResult.data?.length          || 0,
-          analysisError: analysesResult.error?.message    || null,
-        }
       })
     }
 
@@ -45,16 +38,16 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    console.error('Admin API error:', msg)
+    console.error('Admin GET error:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const admin        = getAdminClient()
-    const body         = await req.json()
-    const { action }   = body
+    const admin      = getAdminClient()
+    const body       = await req.json()
+    const { action } = body
 
     if (action === 'add_admin') {
       const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 500 })
@@ -70,14 +63,37 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'save_plan') {
-      await admin.from('ai_transactions').update({ plan_data: body.planData, admin_notes: body.adminNotes }).eq('id', body.id)
-      return NextResponse.json({ success: true })
+      const { data, error } = await admin
+        .from('ai_transactions')
+        .update({
+          plan_data:   body.planData,
+          admin_notes: body.adminNotes,
+          updated_at:  new Date().toISOString(),
+        })
+        .eq('id', body.id)
+        .select()
+
+      if (error) {
+        console.error('save_plan DB error:', error.message, error.code, error.details)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      const rowsUpdated = data?.length ?? 0
+      console.log('save_plan success — rows updated:', rowsUpdated, '| id:', body.id)
+
+      if (rowsUpdated === 0) {
+        console.warn('save_plan: 0 rows updated — id may not exist:', body.id)
+        return NextResponse.json({ error: 'No rows updated — transaction ID not found' }, { status: 404 })
+      }
+
+      return NextResponse.json({ success: true, updated: rowsUpdated })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
+    console.error('Admin POST error:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

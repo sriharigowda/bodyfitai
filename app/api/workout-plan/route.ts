@@ -1,4 +1,5 @@
-'use client'
+export const dynamic = 'force-dynamic'
+import { NextRequest, NextResponse } from 'next/server'
 import { useState, useEffect } from 'react'
 import { getUser } from '@/lib/auth'
 

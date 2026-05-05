@@ -176,7 +176,6 @@ export default function MealPlanPage() {
           dailyCalories: r?.dailyCalories || 2000,
           protein:       r?.protein  || 150,
           carbs:         r?.carbs    || 200,
-          carbs:         r?.carbs    || 200,
           fat:           r?.fat      || 60,
           dietType,
           gymTime,

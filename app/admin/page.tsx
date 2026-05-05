@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface AppUser {
   id: string; email: string; name?: string; age?: number; gender?: string
   created_at: string; goal?: string; diet_type?: string
@@ -13,7 +12,6 @@ interface AppUser {
 interface Transaction { id: string; user_id: string; feature: string; amount_inr: number; created_at: string; user_name?: string }
 interface AdminUser { id: string; user_id: string; role: string }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const G = {
   glass: { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, boxShadow:'0 2px 16px rgba(59,130,246,0.06)' },
   card:  { background:'rgba(255,255,255,0.60)', backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border:'0.5px solid rgba(255,255,255,0.88)', borderRadius:14, overflow:'hidden' as const },
@@ -54,11 +52,17 @@ function BarRow({ label, value, max, color, prefix='' }: { label:string; value:n
 
 // ─── Meal Plan Editor ─────────────────────────────────────────────────────────
 function MealPlanEditor({ plan, planId, onSave }: { plan: any; planId?: string; onSave: (id: string, data: any, notes: string) => Promise<void> }) {
-  const [data,   setData]   = useState<any>(plan ? JSON.parse(JSON.stringify(plan)) : null)
+  // Use key-based re-mount: when plan changes from parent (after reload), component resets
+  const [data,   setData]   = useState<any>(() => plan ? JSON.parse(JSON.stringify(plan)) : null)
   const [tab,    setTab]    = useState<'nonveg'|'veg'>('nonveg')
   const [notes,  setNotes]  = useState('')
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
+
+  // Sync when plan prop changes (after admin saves + loadData re-fetches)
+  useEffect(() => {
+    if (plan) setData(JSON.parse(JSON.stringify(plan)))
+  }, [plan])
 
   if (!data) return (
     <div style={{ textAlign:'center', padding:'32px 16px' }}>
@@ -142,10 +146,10 @@ function MealPlanEditor({ plan, planId, onSave }: { plan: any; planId?: string; 
       <div style={{ marginTop:14, padding:'12px', background:'rgba(59,130,246,0.04)', border:'0.5px solid rgba(59,130,246,0.12)', borderRadius:10 }}>
         <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.05em', marginBottom:6 }}>COACHING NOTES FOR USER</div>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          placeholder="Add personalized coaching notes... e.g. 'Your post-workout protein looks great. Try adding a casein shake before bed.'"
+          placeholder="Add personalized coaching notes..."
           style={{ ...G.input, minHeight:70, resize:'vertical' as const, marginBottom:8 }}/>
         <div style={{ display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center' }}>
-          {saved && <span style={{ fontSize:12, color:'#10b981' }}>✓ Saved & user notified!</span>}
+          {saved && <span style={{ fontSize:12, color:'#10b981' }}>✓ Saved!</span>}
           <button onClick={handleSave} disabled={saving||!planId} style={{ ...G.btn, opacity:(saving||!planId)?0.7:1 }}>
             {saving ? 'Saving...' : 'Save & notify user'}
           </button>
@@ -157,11 +161,15 @@ function MealPlanEditor({ plan, planId, onSave }: { plan: any; planId?: string; 
 
 // ─── Workout Plan Editor ──────────────────────────────────────────────────────
 function WorkoutPlanEditor({ plan, planId, onSave }: { plan: any; planId?: string; onSave: (id: string, data: any, notes: string) => Promise<void> }) {
-  const [data,      setData]      = useState<any>(plan ? JSON.parse(JSON.stringify(plan)) : null)
+  const [data,      setData]      = useState<any>(() => plan ? JSON.parse(JSON.stringify(plan)) : null)
   const [activeDay, setActiveDay] = useState(0)
   const [notes,     setNotes]     = useState('')
   const [saving,    setSaving]    = useState(false)
   const [saved,     setSaved]     = useState(false)
+
+  useEffect(() => {
+    if (plan) setData(JSON.parse(JSON.stringify(plan)))
+  }, [plan])
 
   if (!data?.days) return (
     <div style={{ textAlign:'center', padding:'32px 16px' }}>
@@ -221,10 +229,7 @@ function WorkoutPlanEditor({ plan, planId, onSave }: { plan: any; planId?: strin
           <div key={ei} style={{ border:'0.5px solid rgba(59,130,246,0.12)', borderRadius:10, marginBottom:8, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:'rgba(255,255,255,0.40)', borderBottom:'0.5px solid rgba(59,130,246,0.08)' }}>
               <input value={ex.name} onChange={e => updateEx(activeDay, ei, 'name', e.target.value)}
-                style={{ flex:1, fontSize:13, fontWeight:500, border:'none', background:'transparent', color:'#1e293b', outline:'none' }}
-                onFocus={e => (e.target.style.background='rgba(59,130,246,0.04)')}
-                onBlur={e  => (e.target.style.background='transparent')}
-              />
+                style={{ flex:1, fontSize:13, fontWeight:500, border:'none', background:'transparent', color:'#1e293b', outline:'none' }}/>
               <button onClick={() => deleteEx(activeDay, ei)} style={{ width:20, height:20, borderRadius:4, border:'0.5px solid rgba(239,68,68,0.25)', background:'rgba(239,68,68,0.06)', color:'#ef4444', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
             </div>
             <div style={{ padding:'8px 12px', display:'flex', gap:10, flexWrap:'wrap' as const }}>
@@ -256,10 +261,10 @@ function WorkoutPlanEditor({ plan, planId, onSave }: { plan: any; planId?: strin
       <div style={{ marginTop:10, padding:'12px', background:'rgba(59,130,246,0.04)', border:'0.5px solid rgba(59,130,246,0.12)', borderRadius:10 }}>
         <div style={{ fontSize:11, color:'#3b82f6', fontWeight:600, letterSpacing:'0.05em', marginBottom:6 }}>COACHING NOTES FOR USER</div>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          placeholder="Add coaching notes... e.g. 'Focus on bench press form — keep shoulder blades retracted throughout the movement.'"
+          placeholder="Add coaching notes..."
           style={{ ...G.input, minHeight:70, resize:'vertical' as const, marginBottom:8 }}/>
         <div style={{ display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center' }}>
-          {saved && <span style={{ fontSize:12, color:'#10b981' }}>✓ Saved & user notified!</span>}
+          {saved && <span style={{ fontSize:12, color:'#10b981' }}>✓ Saved!</span>}
           <button onClick={handleSave} disabled={saving||!planId} style={{ ...G.btn, opacity:(saving||!planId)?0.7:1 }}>
             {saving ? 'Saving...' : 'Save & notify user'}
           </button>
@@ -270,12 +275,30 @@ function WorkoutPlanEditor({ plan, planId, onSave }: { plan: any; planId?: strin
 }
 
 // ─── User Detail View ─────────────────────────────────────────────────────────
-function UserDetailView({ user, onBack }: { user: AppUser; onBack: () => void }) {
+function UserDetailView({ user, onBack, onPlanSaved }: {
+  user: AppUser
+  onBack: () => void
+  onPlanSaved: (id: string, planData: any, feature: 'meal'|'workout') => void
+}) {
+  const [mealPlan,    setMealPlan]    = useState<any>(user.meal_plan)
+  const [workoutPlan, setWorkoutPlan] = useState<any>(user.workout_plan)
+
   async function savePlan(id: string, planData: any, notes: string) {
-    await fetch('/api/admin', {
+    const res = await fetch('/api/admin', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'save_plan', id, planData, adminNotes: notes }),
     })
+    const data = await res.json()
+    if (data.success) {
+      // Update local state immediately so UI shows new data without full reload
+      if (id === user.meal_plan_id) {
+        setMealPlan(planData)
+        onPlanSaved(id, planData, 'meal')
+      } else if (id === user.workout_plan_id) {
+        setWorkoutPlan(planData)
+        onPlanSaved(id, planData, 'workout')
+      }
+    }
   }
 
   const MEAS_FIELDS = [
@@ -297,7 +320,6 @@ function UserDetailView({ user, onBack }: { user: AppUser; onBack: () => void })
         <Pill label="Active" color="green"/>
       </div>
 
-      {/* Profile + Body composition */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
         <div style={G.card}>
           <div style={G.hdr}><div style={{ fontSize:12, fontWeight:500 }}>Profile</div></div>
@@ -325,7 +347,6 @@ function UserDetailView({ user, onBack }: { user: AppUser; onBack: () => void })
         </div>
       </div>
 
-      {/* 12 Measurements */}
       <div style={{ ...G.card, marginBottom:12 }}>
         <div style={G.hdr}>
           <div style={{ fontSize:12, fontWeight:500 }}>Body measurements (cm)</div>
@@ -347,25 +368,23 @@ function UserDetailView({ user, onBack }: { user: AppUser; onBack: () => void })
         </div>
       </div>
 
-      {/* Meal Plan */}
       <div style={{ ...G.card, marginBottom:12 }}>
         <div style={G.hdr}>
           <div style={{ fontSize:12, fontWeight:500 }}>Meal plan</div>
-          <Pill label={user.meal_plan?'Generated':'Not purchased'} color={user.meal_plan?'green':'gray'}/>
+          <Pill label={mealPlan?'Generated':'Not purchased'} color={mealPlan?'green':'gray'}/>
         </div>
         <div style={{ padding:'12px 14px' }}>
-          <MealPlanEditor plan={user.meal_plan} planId={user.meal_plan_id} onSave={savePlan}/>
+          <MealPlanEditor plan={mealPlan} planId={user.meal_plan_id} onSave={savePlan}/>
         </div>
       </div>
 
-      {/* Workout Plan */}
       <div style={{ ...G.card, marginBottom:12 }}>
         <div style={G.hdr}>
           <div style={{ fontSize:12, fontWeight:500 }}>Workout plan</div>
-          <Pill label={user.workout_plan?'Generated':'Not purchased'} color={user.workout_plan?'green':'gray'}/>
+          <Pill label={workoutPlan?'Generated':'Not purchased'} color={workoutPlan?'green':'gray'}/>
         </div>
         <div style={{ padding:'12px 14px' }}>
-          <WorkoutPlanEditor plan={user.workout_plan} planId={user.workout_plan_id} onSave={savePlan}/>
+          <WorkoutPlanEditor plan={workoutPlan} planId={user.workout_plan_id} onSave={savePlan}/>
         </div>
       </div>
     </div>
@@ -404,9 +423,7 @@ export default function AdminPage() {
       if (data.error) { console.error('Admin load error:', data.error); setLoading(false); return }
 
       const { users: authUsers=[], profiles=[], analyses=[], txns=[], adminUsers: admins=[] } = data
-
       const profileMap  = Object.fromEntries((profiles||[]).map((p:any) => [p.user_id, p]))
-      // Group analyses by user_id — take latest (analyses are ordered by created_at desc)
       const analysisMap: Record<string,any> = {}
       ;(analyses||[]).forEach((a:any) => { if (!analysisMap[a.user_id]) analysisMap[a.user_id] = a })
       const txnMap: Record<string,any[]> = {}
@@ -419,46 +436,30 @@ export default function AdminPage() {
         const mealTxn    = userTxns.find((t:any) => ['meal_plan','bundle'].includes(t.feature))
         const workoutTxn = userTxns.find((t:any) => ['workout_plan','bundle'].includes(t.feature))
         const totalSpent = userTxns.reduce((s:number,t:any) => s+(t.amount_inr||0), 0)
-        // user_analyses stores flat columns — handle all possible naming variations
         const a = analysis
-        const bodyFat  = a.body_fat_percent ?? a.body_fat ?? a.bodyFatPercent ?? null
-        const leanMass = a.lean_mass ?? a.leanMass ?? null
-        const fatMass  = a.fat_mass  ?? a.fatMass  ?? null
+        const bodyFat  = a.body_fat_percent ?? a.body_fat ?? null
+        const leanMass = a.lean_mass ?? null
         const ffmiVal  = a.ffmi ?? null
-        const bmrVal   = a.bmr  ?? null
-        const cals     = a.daily_calories ?? a.dailyCalories ?? null
-
+        const bmrVal   = a.bmr ?? null
+        const cals     = a.daily_calories ?? null
         const meas = a.user_id ? {
-          neck:           a.neck,
-          aroundShoulder: a.around_shoulder ?? a.aroundShoulder,
-          chest:          a.chest,
-          bicep:          a.bicep,
-          forearm:        a.forearm,
-          wrist:          a.wrist,
-          stomach:        a.stomach,
-          hip:            a.hip,
-          thigh:          a.thigh,
-          knee:           a.knee,
-          calf:           a.calf,
-          ankle:          a.ankle,
+          neck: a.neck, aroundShoulder: a.around_shoulder ?? a.aroundShoulder,
+          chest: a.chest, bicep: a.bicep, forearm: a.forearm,
+          wrist: a.wrist, stomach: a.stomach, hip: a.hip,
+          thigh: a.thigh, knee: a.knee, calf: a.calf, ankle: a.ankle,
         } : null
 
         return {
-          id: u.id, email: u.email,
-          name:   profile.name,
-          age:    profile.age    || a.age,
-          gender: profile.gender || a.gender,
-          created_at: u.created_at,
-          goal:       a.goal,
-          diet_type:  a.diet_type ?? a.dietType,
-          body_fat:   bodyFat  ? Math.round(bodyFat * 10) / 10 : null,
-          lean_mass:  leanMass ? Math.round(leanMass * 10) / 10 : null,
-          ffmi:       ffmiVal  ? Math.round(ffmiVal * 10) / 10  : null,
-          bmr:        bmrVal   ? Math.round(bmrVal)              : null,
-          calories:   cals     ? Math.round(cals)                : null,
-          measurements: meas,
-          total_spent: totalSpent,
-          analyses_count: analyses.filter((a:any)=>a.user_id===u.id).length,
+          id: u.id, email: u.email, name: profile.name,
+          age: profile.age || a.age, gender: profile.gender || a.gender,
+          created_at: u.created_at, goal: a.goal, diet_type: a.diet_type ?? a.dietType,
+          body_fat:  bodyFat  ? Math.round(bodyFat * 10) / 10 : null,
+          lean_mass: leanMass ? Math.round(leanMass * 10) / 10 : null,
+          ffmi:      ffmiVal  ? Math.round(ffmiVal * 10) / 10  : null,
+          bmr:       bmrVal   ? Math.round(bmrVal)              : null,
+          calories:  cals     ? Math.round(cals)                : null,
+          measurements: meas, total_spent: totalSpent,
+          analyses_count: (analyses||[]).filter((a:any) => a.user_id === u.id).length,
           meal_plan: mealTxn?.plan_data, meal_plan_id: mealTxn?.id,
           workout_plan: workoutTxn?.plan_data, workout_plan_id: workoutTxn?.id,
         }
@@ -469,6 +470,12 @@ export default function AdminPage() {
       setAdminUsers(admins||[])
       const totalRevenue = (txns||[]).reduce((s:number,t:any) => s+(t.amount_inr||0), 0)
       setMetrics({ users: appUsers.length, revenue: totalRevenue, cost: Math.round((txns||[]).length*0.12*100)/100, analyses: analyses?.length||0 })
+
+      // Update selectedUser if in detail view
+      setSelectedUser(prev => {
+        if (!prev) return null
+        return appUsers.find(u => u.id === prev.id) || prev
+      })
     } catch (e) {
       console.error('Load error:', e)
     }
@@ -489,16 +496,26 @@ export default function AdminPage() {
     loadData()
   }
 
+  function handlePlanSaved(id: string, planData: any, feature: 'meal'|'workout') {
+    // Update the user in the users list immediately
+    setUsers(prev => prev.map(u => {
+      if (feature === 'meal' && u.meal_plan_id === id) return { ...u, meal_plan: planData }
+      if (feature === 'workout' && u.workout_plan_id === id) return { ...u, workout_plan: planData }
+      return u
+    }))
+    // Also trigger a background reload for full sync
+    setTimeout(() => loadData(), 1000)
+  }
+
   const filtered = users.filter(u => {
     const ms = !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
-    const mf = filter==='all' || (filter==='paying'&&(u.total_spent||0)>0) || (filter==='recent'&&true)
+    const mf = filter==='all' || (filter==='paying'&&(u.total_spent||0)>0)
     return ms && mf
   })
 
   const revenueByFeature = transactions.reduce((acc:Record<string,number>,t) => { acc[t.feature]=(acc[t.feature]||0)+(t.amount_inr||0); return acc }, {})
   const maxRevenue       = Math.max(...Object.values(revenueByFeature), 1)
 
-  // ── Login screen ─────────────────────────────────────────────────────────────
   if (!authed) return (
     <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <div style={{ ...G.glass, padding:'32px 28px', maxWidth:380, width:'100%', textAlign:'center' }}>
@@ -519,10 +536,8 @@ export default function AdminPage() {
     </div>
   )
 
-  // ── Admin panel ───────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#e8f0fe 0%,#f0f7ff 50%,#e8f4ff 100%)' }}>
-      {/* Nav */}
       <nav style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'12px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky' as const, top:0, zIndex:10 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ fontSize:17, fontWeight:500, color:'#1e293b' }}>BodyFit<span style={{ color:'#3b82f6' }}>AI</span></div>
@@ -530,12 +545,12 @@ export default function AdminPage() {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           {loading && <span style={{ fontSize:11, color:'#94a3b8' }}>Loading...</span>}
+          <button onClick={loadData} style={{ ...G.btnGh, fontSize:11 }}>↻ Refresh</button>
           <a href="/" style={{ fontSize:11, color:'#64748b', textDecoration:'none', background:'rgba(255,255,255,0.60)', border:'0.5px solid rgba(255,255,255,0.9)', borderRadius:20, padding:'4px 10px' }}>View site</a>
           <button onClick={() => { setAuthed(false); setPassword('') }} style={{ fontSize:11, color:'#94a3b8', background:'none', border:'none', cursor:'pointer' }}>Sign out</button>
         </div>
       </nav>
 
-      {/* Tab bar */}
       <div style={{ background:'rgba(255,255,255,0.75)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'0.5px solid rgba(255,255,255,0.9)', padding:'0 20px', display:'flex', gap:2 }}>
         {(['overview','users','tokens','settings'] as const).map(tab => (
           <button key={tab} onClick={() => { setActiveTab(tab); setSelectedUser(null) }}
@@ -547,15 +562,14 @@ export default function AdminPage() {
 
       <div style={{ maxWidth:900, margin:'0 auto', padding:'24px 20px 48px' }}>
 
-        {/* ── OVERVIEW ── */}
         {activeTab==='overview' && (
           <div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
               {[
-                { label:'Total users',   value:metrics.users.toString(),    sub:'registered',      color:'#3b82f6' },
-                { label:'Total revenue', value:`₹${metrics.revenue}`,       sub:'all time',        color:'#10b981' },
-                { label:'AI cost',       value:`₹${metrics.cost}`,          sub:'~2% of revenue',  color:'#f59e0b' },
-                { label:'Analyses',      value:metrics.analyses.toString(), sub:'completed',        color:'#8b5cf6' },
+                { label:'Total users',   value:metrics.users.toString(),    sub:'registered',     color:'#3b82f6' },
+                { label:'Total revenue', value:`₹${metrics.revenue}`,       sub:'all time',       color:'#10b981' },
+                { label:'AI cost',       value:`₹${metrics.cost}`,          sub:'~2% of revenue', color:'#f59e0b' },
+                { label:'Analyses',      value:metrics.analyses.toString(), sub:'completed',      color:'#8b5cf6' },
               ].map(m => (
                 <div key={m.label} style={{ ...G.glass, padding:'14px 16px' }}>
                   <div style={{ fontSize:10, color:'#94a3b8', letterSpacing:'0.05em', marginBottom:6 }}>{m.label.toUpperCase()}</div>
@@ -596,10 +610,13 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── USERS ── */}
         {activeTab==='users' && (
           selectedUser ? (
-            <UserDetailView user={selectedUser} onBack={() => setSelectedUser(null)}/>
+            <UserDetailView
+              user={selectedUser}
+              onBack={() => setSelectedUser(null)}
+              onPlanSaved={handlePlanSaved}
+            />
           ) : (
             <>
               <div style={{ display:'flex', gap:8, marginBottom:14 }}>
@@ -607,9 +624,7 @@ export default function AdminPage() {
                 <select value={filter} onChange={e=>setFilter(e.target.value)} style={{ ...G.input, width:'auto' }}>
                   <option value="all">All users</option>
                   <option value="paying">Paying only</option>
-                  <option value="recent">Recent</option>
                 </select>
-                <button onClick={loadData} style={G.btnGh}>↻ Refresh</button>
               </div>
               <div style={G.card}>
                 <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
@@ -654,15 +669,14 @@ export default function AdminPage() {
           )
         )}
 
-        {/* ── AI & REVENUE ── */}
         {activeTab==='tokens' && (
           <div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
               {[
-                { label:'AI cost',      value:`₹${metrics.cost}`,     sub:'this month',   color:'#f59e0b' },
-                { label:'AI revenue',   value:`₹${metrics.revenue}`,  sub:'all time',     color:'#10b981' },
-                { label:'Margin',       value:metrics.revenue>0?`${Math.round(((metrics.revenue-metrics.cost)/metrics.revenue)*100)}%`:'98%', sub:'profit margin', color:'#3b82f6' },
-                { label:'Avg/user',     value:metrics.users>0?`₹${Math.round(metrics.revenue/metrics.users*10)/10}`:'₹0', sub:'avg spent', color:'#8b5cf6' },
+                { label:'AI cost',    value:`₹${metrics.cost}`,    sub:'this month',    color:'#f59e0b' },
+                { label:'AI revenue', value:`₹${metrics.revenue}`, sub:'all time',      color:'#10b981' },
+                { label:'Margin',     value:metrics.revenue>0?`${Math.round(((metrics.revenue-metrics.cost)/metrics.revenue)*100)}%`:'98%', sub:'profit margin', color:'#3b82f6' },
+                { label:'Avg/user',   value:metrics.users>0?`₹${Math.round(metrics.revenue/metrics.users*10)/10}`:'₹0', sub:'avg spent', color:'#8b5cf6' },
               ].map(m=>(
                 <div key={m.label} style={{ ...G.glass, padding:'14px 16px' }}>
                   <div style={{ fontSize:10, color:'#94a3b8', letterSpacing:'0.05em', marginBottom:6 }}>{m.label.toUpperCase()}</div>
@@ -694,16 +708,12 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── SETTINGS ── */}
         {activeTab==='settings' && (
           <div>
             <div style={{ fontSize:11, color:'#94a3b8', fontWeight:500, letterSpacing:'0.06em', marginBottom:10 }}>ADMIN ROLES</div>
             {adminUsers.map(admin=>(
               <div key={admin.id} style={{ ...G.glass, padding:'12px 14px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <Avatar name={admin.user_id} size={30}/>
-                  <div style={{ fontSize:12, color:'#64748b' }}>{admin.user_id}</div>
-                </div>
+                <div style={{ fontSize:12, color:'#64748b' }}>{admin.user_id}</div>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <Pill label={admin.role} color={admin.role==='super_admin'?'blue':admin.role==='admin'?'green':'gray'}/>
                   {admin.role!=='super_admin'&&(
@@ -713,8 +723,7 @@ export default function AdminPage() {
               </div>
             ))}
             {adminUsers.length===0&&<div style={{ ...G.glass, padding:'20px', textAlign:'center', marginBottom:12, fontSize:12, color:'#94a3b8' }}>No admins added yet</div>}
-
-            <div style={{ ...G.glass, padding:'14px 16px', marginBottom:20 }}>
+            <div style={{ ...G.glass, padding:'14px 16px' }}>
               <div style={{ fontSize:11, color:'#64748b', fontWeight:500, marginBottom:10 }}>Add new admin</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="User email address..." style={{ ...G.input, flex:1 }}/>
@@ -723,22 +732,6 @@ export default function AdminPage() {
                   <option value="viewer">Viewer</option>
                 </select>
                 <button onClick={addAdmin} style={G.btn}>Add</button>
-              </div>
-            </div>
-
-            <div style={{ fontSize:11, color:'#94a3b8', fontWeight:500, letterSpacing:'0.06em', marginBottom:10 }}>SECURITY</div>
-            <div style={G.card}>
-              <div style={{ padding:'12px 14px' }}>
-                {[
-                  ['Password protection','Enabled','green'],
-                  ['Admin URL','/admin','gray'],
-                  ['Service role key', process.env.NEXT_PUBLIC_SUPABASE_URL?'Connected':'Not set', process.env.NEXT_PUBLIC_SUPABASE_URL?'green':'red'],
-                ].map(([l,v,c])=>(
-                  <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'0.5px solid rgba(59,130,246,0.06)', fontSize:12 }}>
-                    <span style={{ color:'#64748b' }}>{l}</span>
-                    <Pill label={v as string} color={c as any}/>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
